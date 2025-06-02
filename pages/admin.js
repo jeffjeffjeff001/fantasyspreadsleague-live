@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
-// Initialize Supabase client using environment variables
+// Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY
 const supabase = createClient(supabaseUrl, supabaseKey)
@@ -25,9 +25,7 @@ export default function AdminUpload() {
 
   const submitGames = async () => {
     setStatus('Saving…')
-
     try {
-      // Prepare an array of inserts
       const inserts = games.map(game => ({
         home_team: game.home,
         away_team: game.away,
@@ -35,16 +33,9 @@ export default function AdminUpload() {
         kickoff_time: new Date(game.time).toISOString(),
         week: parseInt(game.week, 10)
       }))
-
-      // Insert into the 'games' table
-      const { error } = await supabase
-        .from('games')
-        .insert(inserts)
-
+      const { error } = await supabase.from('games').insert(inserts)
       if (error) throw error
-
       setStatus('Games saved successfully!')
-      // Optionally, clear the form or keep existing rows
       setGames([{ home: '', away: '', spread: '', time: '', week: '' }])
     } catch (err) {
       console.error(err)
@@ -94,7 +85,6 @@ export default function AdminUpload() {
         Add Game
       </button>
       <button onClick={submitGames}>Save All to Database</button>
-
       {status && <p style={{ marginTop: 16 }}>{status}</p>}
     </div>
   )
