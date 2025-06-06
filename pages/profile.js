@@ -3,16 +3,16 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 
-// Initialize Supabase client
-const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseKey  = process.env.NEXT_PUBLIC_SUPABASE_KEY
-const supabase     = createClient(supabaseUrl, supabaseKey)
+// Initialize Supabase
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY
+const supabase    = createClient(supabaseUrl, supabaseKey)
 
 export default function UserProfile() {
-  const [email, setEmail]     = useState('')
-  const [picks, setPicks]     = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState(null)
+  const [email, setEmail]         = useState('')
+  const [picks, setPicks]         = useState([])
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState(null)
 
   const loadPicks = async () => {
     setLoading(true)
@@ -20,6 +20,9 @@ export default function UserProfile() {
     setPicks([])
 
     try {
+      // ── IMPORTANT CHANGE HERE ── 
+      // Use `order('kickoff_time', { foreignTable: 'games' })` instead of
+      // `order('games.kickoff_time', ...)`.
       const { data, error } = await supabase
         .from('picks')
         .select(`
@@ -34,7 +37,7 @@ export default function UserProfile() {
         `)
         .eq('user_email', email)
         .eq('games.week', 1)
-        .order('games.kickoff_time', { ascending: true })
+        .order('kickoff_time', { ascending: true, foreignTable: 'games' })
 
       if (error) throw error
       setPicks(data || [])
@@ -49,7 +52,6 @@ export default function UserProfile() {
   return (
     <div style={{ padding: 20 }}>
       <h2>Your Profile & Picks (Week 1)</h2>
-      {/* Return Home Button */}
       <p>
         <Link href="/">
           <a style={{ color: '#0070f3', textDecoration: 'underline' }}>← Return Home</a>
