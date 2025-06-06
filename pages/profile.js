@@ -1,5 +1,6 @@
 // pages/profile.js
 import { useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 
 // Initialize Supabase client
@@ -8,19 +9,17 @@ const supabaseKey  = process.env.NEXT_PUBLIC_SUPABASE_KEY
 const supabase     = createClient(supabaseUrl, supabaseKey)
 
 export default function UserProfile() {
-  const [email, setEmail]         = useState('')
-  const [picks, setPicks]         = useState([])
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState(null)
+  const [email, setEmail]     = useState('')
+  const [picks, setPicks]     = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
 
-  // Fetch all picks + game data for email in Week 1
   const loadPicks = async () => {
     setLoading(true)
     setError(null)
     setPicks([])
 
     try {
-      // Fetch picks, joining to games (filter week=1 via the join)
       const { data, error } = await supabase
         .from('picks')
         .select(`
@@ -50,6 +49,12 @@ export default function UserProfile() {
   return (
     <div style={{ padding: 20 }}>
       <h2>Your Profile & Picks (Week 1)</h2>
+      {/* Return Home Button */}
+      <p>
+        <Link href="/">
+          <a style={{ color: '#0070f3', textDecoration: 'underline' }}>← Return Home</a>
+        </Link>
+      </p>
 
       <input
         type="email"
@@ -76,7 +81,6 @@ export default function UserProfile() {
           <tbody>
             {picks.map((pick) => {
               const g = pick.games
-              // Format: "Away Team @ Home Team"
               const matchup = `${g.away_team} @ ${g.home_team}`
               return (
                 <tr key={pick.id}>
