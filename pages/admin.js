@@ -1,22 +1,22 @@
 // pages/admin.js
 import { useState } from 'react'
+import Link from 'next/link'
+
+// (Supabase initialization code omitted here—assume you already have it set up above)
 import { createClient } from '@supabase/supabase-js'
 
-// Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 export default function AdminUpload() {
-  const [games, setGames] = useState([
-    { home: '', away: '', spread: '', time: '', week: '' }
-  ])
+  const [games, setGames] = useState([{ home: '', away: '', spread: '', time: '', week: '' }])
   const [status, setStatus] = useState(null)
 
   const handleChange = (index, field, value) => {
-    const updated = [...games]
-    updated[index][field] = value
-    setGames(updated)
+    const updatedGames = [...games]
+    updatedGames[index][field] = value
+    setGames(updatedGames)
   }
 
   const addGameRow = () => {
@@ -46,37 +46,44 @@ export default function AdminUpload() {
   return (
     <div style={{ padding: 20 }}>
       <h2>Upload Week Games</h2>
+      {/* Return Home Button */}
+      <p>
+        <Link href="/">
+          <a style={{ color: '#0070f3', textDecoration: 'underline' }}>← Return Home</a>
+        </Link>
+      </p>
+
       {games.map((game, idx) => (
-        <div key={idx} style={{ marginBottom: 12 }}>
+        <div key={idx} style={{ marginBottom: 10 }}>
           <input
             placeholder="Home Team"
             value={game.home}
-            onChange={e => handleChange(idx, 'home', e.target.value)}
+            onChange={(e) => handleChange(idx, 'home', e.target.value)}
             style={{ marginRight: 8 }}
           />
           <input
             placeholder="Away Team"
             value={game.away}
-            onChange={e => handleChange(idx, 'away', e.target.value)}
+            onChange={(e) => handleChange(idx, 'away', e.target.value)}
             style={{ marginRight: 8 }}
           />
           <input
             placeholder="Spread"
             value={game.spread}
-            onChange={e => handleChange(idx, 'spread', e.target.value)}
+            onChange={(e) => handleChange(idx, 'spread', e.target.value)}
             style={{ width: 60, marginRight: 8 }}
           />
           <input
             type="datetime-local"
             placeholder="Kickoff Time"
             value={game.time}
-            onChange={e => handleChange(idx, 'time', e.target.value)}
+            onChange={(e) => handleChange(idx, 'time', e.target.value)}
             style={{ marginRight: 8 }}
           />
           <input
             placeholder="Week #"
             value={game.week}
-            onChange={e => handleChange(idx, 'week', e.target.value)}
+            onChange={(e) => handleChange(idx, 'week', e.target.value)}
             style={{ width: 60 }}
           />
         </div>
@@ -84,7 +91,8 @@ export default function AdminUpload() {
       <button onClick={addGameRow} style={{ marginRight: 12 }}>
         Add Game
       </button>
-      <button onClick={submitGames}>Save All to Database</button>
+      <button onClick={submitGames}>Submit Games</button>
+
       {status && <p style={{ marginTop: 16 }}>{status}</p>}
     </div>
   )
