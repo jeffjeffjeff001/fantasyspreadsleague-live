@@ -1,18 +1,18 @@
-// pages/submit-picks.js
+// pages/picks.js
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 // Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY
-const supabase = createClient(supabaseUrl, supabaseKey)
+const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseKey  = process.env.NEXT_PUBLIC_SUPABASE_KEY
+const supabase     = createClient(supabaseUrl, supabaseKey)
 
 export default function PickSubmission() {
-  const [games, setGames] = useState([])
-  const [email, setEmail] = useState('')
-  const [picks, setPicks] = useState({})
+  const [games, setGames]       = useState([])
+  const [email, setEmail]       = useState('')
+  const [picks, setPicks]       = useState({})
   const [lockPick, setLockPick] = useState(null)
-  const [status, setStatus] = useState(null)
+  const [status, setStatus]     = useState(null)
 
   // Fetch Week 1 games from Supabase
   useEffect(() => {
@@ -20,7 +20,7 @@ export default function PickSubmission() {
       const { data, error } = await supabase
         .from('games')
         .select('*')
-        .eq('week', 1)           // hard-coded for now; later you can make this dynamic
+        .eq('week', 1)
         .order('kickoff_time', { ascending: true })
 
       if (error) {
@@ -32,56 +32,123 @@ export default function PickSubmission() {
     fetchGames()
   }, [])
 
-  // When a user picks a team
+  // Helper: returns true if ISO timestamp falls on Thursday (UTC)
+  function isThursday(iso) {
+    const d = new Date(iso)
+    return d.getUTCDay() === 4
+  }
+  // Helper: returns true if ISO timestamp falls on Monday (UTC)
+  function isMonday(iso) {
+    const d = new Date(iso)
+    return d.getUTCDay() === 1
+  }
+
+  // When a user picks a team (radio button)
   const handlePick = (gameId, team) => {
     setPicks({ ...picks, [gameId]: team })
   }
 
-  // When a user marks the lock pick
+  // When a user marks a lock pick (checkbox)
   const handleLockChange = (gameId) => {
-    setLockPick(gameId)
+    // If they click an already-checked lock, uncheck it; otherwise set
+    setLockPick(gameId === lockPick ? null : gameId)
   }
 
-  // Validate & submit picks to Supabase
-  const submitPicks = async () => {
-    // Ensure exactly 5 picks
-    if (Object.keys(picks).length !== 5) {
-      setStatus('You must make exactly 5 picks.')
-      return
-    }
-    // Ensure one lock pick
-    if (!lockPick) {
-      setStatus('You must choose one “lock” pick.')
-      return
-    }
-    // Ensure lockPick is among the 5 picks
-    if (!picks[lockPick]) {
-      setStatus('Your lock pick must be one of your 5 picks.')
-      return
-    }
-
-    setStatus('Submitting picks…')
-
+  // Shared function to insert picks into Supabase
+  async function savePicksToDatabase() {
     try {
-      // Prepare insert array
+      // Build insert array
       const inserts = Object.entries(picks).map(([game_id, selected_team]) => ({
         user_email: email,
         game_id,
         selected_team,
         is_lock: game_id === lockPick
       }))
-
       const { error } = await supabase.from('picks').insert(inserts)
       if (error) throw error
 
-      setStatus('Picks submitted successfully!')
-      // Optionally clear the form:
+      setStatus('✅ Picks saved successfully!')
+      // Clear picks and lock for next time
       setPicks({})
       setLockPick(null)
     } catch (err) {
       console.error('Error inserting picks:', err)
-      setStatus(`Error: ${err.message}`)
+      setStatus(`🚫 Error: ${err.message}`)
     }
+  }
+
+  // Validate & submit picks to Supabase
+  const submitPicks = async () => {
+    setStatus(null)
+    const pickedIds = Object.keys(picks) // array of game IDs user selected
+    const count = pickedIds.length
+
+    // Case 1: Exactly 1 pick AND that game is on Thursday ➔ valid
+    if (count === 1) {
+      const onlyId = pickedIds[0]
+      const onlyGame = games.find((g) => g.id === onlyId)
+      if (onlyGame && isThursday(onlyGame.kickoff_time)) {
+        // No lock required unless user checked it. But if they did check a lock, ensure it matches
+        if (lockPick && lockPick !== onlyId) {
+          setStatus('🚫 If you lock, it must be that same Thursday game.')
+          return
+        }
+        setStatus('⏳ Saving Thursday‐only pick…')
+        return await savePicksToDatabase()
+      }
+    }
+
+    // Case 3: Exactly 1 pick AND that game is on Monday ➔ valid
+    if (count === 1) {
+      const onlyId = pickedIds[0]
+      const onlyGame = games.find((g) => g.id === onlyId)
+      if (onlyGame && isMonday(onlyGame.kickoff_time)) {
+        if (lockPick && lockPick !== onlyId) {
+          setStatus('🚫 If you lock, it must be that same Monday game.')
+          return
+        }
+        setStatus('⏳ Saving Monday‐only pick…')
+        return await savePicksToDatabase()
+      }
+    }
+
+    // Case 2: Exactly 3 picks AND none are Thursday or Monday ➔ “Best Choice” valid
+    if (count === 3) {
+      // Check each selected game: date not Thu or Mon
+      const invalid = pickedIds.some((id) => {
+        const g = games.find((gg) => gg.id === id)
+        return g ? (isThursday(g.kickoff_time) || isMonday(g.kickoff_time)) : true
+      })
+      if (!invalid) {
+        // If lockPick is set, ensure it corresponds to one of these 3
+        if (lockPick && !pickedIds.includes(lockPick)) {
+          setStatus('🚫 If you lock, it must be one of the three selected games.')
+          return
+        }
+        setStatus('⏳ Saving “Best Choice” 3 picks…')
+        return await savePicksToDatabase()
+      }
+    }
+
+    // Case 4 & 5: At least 5 picks (we allow exactly 5 here)
+    if (count === 5) {
+      // If they checked a lock, ensure it is one of the picked
+      if (lockPick && !pickedIds.includes(lockPick)) {
+        setStatus('🚫 Your lock must be one of the five games you selected.')
+        return
+      }
+      setStatus('⏳ Saving 5 picks…')
+      return await savePicksToDatabase()
+    }
+
+    // Otherwise invalid
+    setStatus(
+      '🚫 Invalid submission. You must either:\n' +
+      '- Pick exactly one Thursday game, OR\n' +
+      '- Pick exactly one Monday game, OR\n' +
+      '- Pick exactly three games (none on Thursday or Monday), OR\n' +
+      '- Pick exactly five games.'
+    )
   }
 
   return (
@@ -97,7 +164,14 @@ export default function PickSubmission() {
       {games.map((game) => (
         <div key={game.id} style={{ marginBottom: 12 }}>
           <strong>
-            {game.away_team} @ {game.home_team} ({game.spread})
+            {game.away_team} @ {game.home_team} ({game.spread}) &nbsp;—&nbsp;
+            <small>
+              {new Date(game.kickoff_time).toLocaleString(undefined, {
+                weekday: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </small>
           </strong>
           <br />
           <label>
@@ -129,7 +203,9 @@ export default function PickSubmission() {
         </div>
       ))}
       <button onClick={submitPicks}>Submit Picks</button>
-      {status && <p style={{ marginTop: 16 }}>{status}</p>}
+      {status && (
+        <pre style={{ whiteSpace: 'pre-wrap', marginTop: 16 }}>{status}</pre>
+      )}
     </div>
   )
 }
