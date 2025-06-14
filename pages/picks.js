@@ -15,7 +15,7 @@ export default function PickSubmission() {
   const [lockPick, setLockPick] = useState(null)
   const [status, setStatus]     = useState(null)
 
-  // load Week 1 games
+  // Load Week 1 games once
   useEffect(() => {
     supabase
       .from('games')
@@ -32,8 +32,8 @@ export default function PickSubmission() {
   const isThursday = (iso) => new Date(iso).getUTCDay() === 4
   const isMonday   = (iso) => new Date(iso).getUTCDay() === 1
 
-  // Count categories
-  const counts = (map) => {
+  // Count how many picks fall in each category
+  const countCats = (map) => {
     let th = 0, mo = 0, be = 0
     Object.keys(map).forEach((id) => {
       const g = games.find((x) => x.id === id)
@@ -45,7 +45,7 @@ export default function PickSubmission() {
     return { th, mo, be }
   }
 
-  // Toggle pick & auto-hide game when picked
+  // Toggle a pick (no removal of games yet)
   const handlePick = (gid, team) => {
     setStatus(null)
     const copy = { ...picks }
@@ -65,7 +65,7 @@ export default function PickSubmission() {
 
     // enforce category caps
     const tmp = { ...copy, [gid]: team }
-    const { th, mo, be } = counts(tmp)
+    const { th, mo, be } = countCats(tmp)
     if (th > 1) {
       setStatus('🚫 Only 1 Thursday pick allowed.')
       return
@@ -79,48 +79,61 @@ export default function PickSubmission() {
       return
     }
 
-    // commit pick (and game will auto-disappear)
+    // commit pick
     copy[gid] = team
     setPicks(copy)
   }
 
-  // Toggle lock
+  // Toggle lock on/off
   const handleLock = (gid) => {
     setLockPick(lockPick === gid ? null : gid)
   }
 
-  // Save picks
-  const save = async () => {
-    const inserts = Object.entries(picks).map(([gid, team]) => ({
+  // Persist picks to Supabase, then remove those games from the list
+  const savePicks = async () => {
+    const entries = Object.entries(picks)
+    if (!entries.length) return
+
+    // build insert payload
+    const inserts = entries.map(([gid, team]) => ({
       user_email: email,
       game_id: gid,
       selected_team: team,
       is_lock: gid === lockPick
     }))
-    const { error } = await supabase.from('picks').insert(inserts)
-    if (error) setStatus(`🚫 ${error.message}`)
-    else {
-      setStatus('✅ Picks saved!')
-      setPicks({})
-      setLockPick(null)
-    }
-  }
 
-  // Submit
-  const submitPicks = () => {
-    if (!email) {
-      setStatus('🚫 Please enter your email!')
+    // insert
+    const { error } = await supabase.from('picks').insert(inserts)
+    if (error) {
+      setStatus(`🚫 ${error.message}`)
       return
     }
-    if (Object.keys(picks).length === 0) {
+
+    // success: remove those games from our local list
+    const submittedIds = entries.map(([gid]) => gid)
+    setGames((prev) => prev.filter((g) => !submittedIds.includes(g.id)))
+
+    // reset picks + lock
+    setPicks({})
+    setLockPick(null)
+    setStatus('✅ Picks submitted and removed from list.')
+  }
+
+  // Validate then save
+  const submitPicks = () => {
+    setStatus(null)
+    if (!email) {
+      setStatus('🚫 Please enter your email.')
+      return
+    }
+    const total = Object.keys(picks).length
+    if (total === 0) {
       setStatus('🚫 Please select at least one game.')
       return
     }
-    save()
+    // all constraints are enforced on pick action, so just save
+    savePicks()
   }
-
-  // Only show games not already picked
-  const available = games.filter((g) => !(g.id in picks))
 
   return (
     <div style={{ padding: 20 }}>
@@ -135,7 +148,7 @@ export default function PickSubmission() {
         style={{ marginBottom: 16, width: 300 }}
       />
 
-      {available.map((g) => (
+      {games.map((g) => (
         <div key={g.id} style={{ marginBottom: 12 }}>
           <strong>
             {g.away_team} @ {g.home_team} ({g.spread}) —{' '}
@@ -145,7 +158,7 @@ export default function PickSubmission() {
               minute: '2-digit'
             })}
           </strong>
-          <br />
+          <br/>
           <label>
             <input
               type="radio"
