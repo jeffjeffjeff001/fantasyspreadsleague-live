@@ -3,19 +3,19 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 
-// Supabase init
-const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseKey  = process.env.NEXT_PUBLIC_SUPABASE_KEY
-const supabase     = createClient(supabaseUrl, supabaseKey)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_KEY
+)
 
 export default function PickSubmission() {
   const [games, setGames]       = useState([])
   const [email, setEmail]       = useState('')
-  const [picks, setPicks]       = useState({})      // { gameId: teamName }
-  const [lockPick, setLockPick] = useState(null)    // optional
+  const [picks, setPicks]       = useState({})      // { gameId: team }
+  const [lockPick, setLockPick] = useState(null)
   const [status, setStatus]     = useState(null)
 
-  // Load week-1 games
+  // load Week 1 games
   useEffect(() => {
     supabase
       .from('games')
@@ -28,27 +28,69 @@ export default function PickSubmission() {
       })
   }, [])
 
-  // Helpers for day checks
+  // helpers
   const isThursday = (iso) => new Date(iso).getUTCDay() === 4
   const isMonday   = (iso) => new Date(iso).getUTCDay() === 1
 
-  // Toggle a pick: click to select or un-select
-  const handlePick = (gid, team) => {
-    if (picks[gid] === team) {
-      const copy = { ...picks }
-      delete copy[gid]
-      setPicks(copy)
-    } else {
-      setPicks({ ...picks, [gid]: team })
-    }
+  const categoryCounts = (currentPicks) => {
+    let th = 0, mo = 0, be = 0
+    Object.keys(currentPicks).forEach((id) => {
+      const g = games.find((x) => x.id === id)
+      if (g) {
+        if (isThursday(g.kickoff_time)) th++
+        else if (isMonday(g.kickoff_time)) mo++
+        else be++
+      }
+    })
+    return { th, mo, be }
   }
 
-  // Toggle lock
+  // toggle pick
+  const handlePick = (gid, team) => {
+    setStatus(null)
+    const copy = { ...picks }
+
+    // un-select
+    if (copy[gid] === team) {
+      delete copy[gid]
+      setPicks(copy)
+      return
+    }
+
+    // enforce max total 5
+    const total = Object.keys(copy).length
+    if (total >= 5) {
+      setStatus('🚫 You can select up to 5 games total.')
+      return
+    }
+
+    // enforce category caps
+    const tmp = { ...copy, [gid]: team }
+    const { th, mo, be } = categoryCounts(tmp)
+    if (th > 1) {
+      setStatus('🚫 Only 1 Thursday pick allowed.')
+      return
+    }
+    if (mo > 1) {
+      setStatus('🚫 Only 1 Monday pick allowed.')
+      return
+    }
+    if (be > 3) {
+      setStatus('🚫 Only 3 “Best Choice” (non-Thu/Mon) picks allowed.')
+      return
+    }
+
+    // ok
+    copy[gid] = team
+    setPicks(copy)
+  }
+
+  // toggle lock
   const handleLock = (gid) => {
     setLockPick(lockPick === gid ? null : gid)
   }
 
-  // Save picks
+  // save
   const save = async () => {
     const inserts = Object.entries(picks).map(([gid, team]) => ({
       user_email: email,
@@ -60,74 +102,22 @@ export default function PickSubmission() {
     if (error) setStatus(`🚫 ${error.message}`)
     else {
       setStatus('✅ Picks saved!')
-      setPicks({}); setLockPick(null)
+      setPicks({})
+      setLockPick(null)
     }
   }
 
-  // Submission logic with category caps
+  // submit: just call save (we enforce caps on selection)
   const submitPicks = () => {
-    setStatus(null)
-    const ids = Object.keys(picks)
-    const total = ids.length
-
-    // Category counts
-    const thursCount = ids.filter((id) => isThursday(games.find(g=>g.id===id).kickoff_time)).length
-    const monCount   = ids.filter((id) => isMonday  (games.find(g=>g.id===id).kickoff_time)).length
-    const bestCount  = total - thursCount - monCount
-
-    // Too many total
-    if (total > 5) {
-      setStatus('🚫 Too many picks: you can select at most 5 games.')
+    if (!email) {
+      setStatus('🚫 Please enter your email.')
       return
     }
-
-    // Too many in any category
-    if (thursCount > 1) {
-      setStatus('🚫 Too many Thursday picks: maximum 1 allowed.')
+    if (!Object.keys(picks).length) {
+      setStatus('🚫 Please select at least one game.')
       return
     }
-    if (monCount > 1) {
-      setStatus('🚫 Too many Monday picks: maximum 1 allowed.')
-      return
-    }
-    if (bestCount > 3) {
-      setStatus('🚫 Too many “Best 3” picks: maximum 3 non-Thu/Mon games.')
-      return
-    }
-
-    // Must include at least 1 Thursday and 1 Monday if submitting 5
-    if (total === 5) {
-      if (thursCount < 1 || monCount < 1) {
-        setStatus('🚫 For 5 picks, include at least 1 Thursday and 1 Monday game.')
-        return
-      }
-    }
-
-    // Single pick always OK
-    if (total === 1) {
-      setStatus('⏳ Saving your pick…')
-      return save()
-    }
-
-    // Best 3 exactly if total===3
-    if (total === 3 && thursCount === 0 && monCount === 0) {
-      setStatus('⏳ Saving “Best 3” picks…')
-      return save()
-    }
-
-    // 5 picks case handled above
-    if (total === 5) {
-      setStatus('⏳ Saving 5 picks…')
-      return save()
-    }
-
-    // Otherwise invalid combination
-    setStatus(
-      '🚫 Invalid selection. You may:\n' +
-      '- Submit 1 pick (any game), OR\n' +
-      '- Submit exactly 3 Best 3 picks (no Thu/Mon), OR\n' +
-      '- Submit exactly 5 picks (must include ≥1 Thurs & ≥1 Mon).'
-    )
+    save()
   }
 
   return (
@@ -139,7 +129,7 @@ export default function PickSubmission() {
         type="email"
         placeholder="Your email"
         value={email}
-        onChange={e => setEmail(e.target.value)}
+        onChange={(e) => setEmail(e.target.value)}
         style={{ marginBottom: 16, width: 300 }}
       />
 
@@ -148,7 +138,9 @@ export default function PickSubmission() {
           <strong>
             {g.away_team} @ {g.home_team} ({g.spread}) —{' '}
             {new Date(g.kickoff_time).toLocaleString(undefined, {
-              weekday:'short', hour:'2-digit', minute:'2-digit'
+              weekday: 'short',
+              hour: '2-digit',
+              minute: '2-digit'
             })}
           </strong>
           <br/>
@@ -156,25 +148,25 @@ export default function PickSubmission() {
             <input
               type="radio"
               name={`pick-${g.id}`}
-              checked={picks[g.id]===g.home_team}
-              onClick={()=>handlePick(g.id, g.home_team)}
+              checked={picks[g.id] === g.home_team}
+              onClick={() => handlePick(g.id, g.home_team)}
             />{' '}
             {g.home_team}
           </label>
-          <label style={{ marginLeft:12 }}>
+          <label style={{ marginLeft: 12 }}>
             <input
               type="radio"
               name={`pick-${g.id}`}
-              checked={picks[g.id]===g.away_team}
-              onClick={()=>handlePick(g.id, g.away_team)}
+              checked={picks[g.id] === g.away_team}
+              onClick={() => handlePick(g.id, g.away_team)}
             />{' '}
             {g.away_team}
           </label>
-          <label style={{ marginLeft:12 }}>
+          <label style={{ marginLeft: 12 }}>
             <input
               type="checkbox"
-              checked={lockPick===g.id}
-              onChange={()=>handleLock(g.id)}
+              checked={lockPick === g.id}
+              onChange={() => handleLock(g.id)}
             />{' '}
             Lock
           </label>
@@ -184,7 +176,7 @@ export default function PickSubmission() {
       <button onClick={submitPicks}>Submit Picks</button>
 
       {status && (
-        <pre style={{ whiteSpace:'pre-wrap', marginTop:16 }}>{status}</pre>
+        <pre style={{ whiteSpace: 'pre-wrap', marginTop: 16 }}>{status}</pre>
       )}
     </div>
   )
