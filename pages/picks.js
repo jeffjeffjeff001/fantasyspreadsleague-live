@@ -28,24 +28,24 @@ export default function PickSubmission() {
       })
   }, [])
 
-  // helpers
+  // Helpers
   const isThursday = (iso) => new Date(iso).getUTCDay() === 4
   const isMonday   = (iso) => new Date(iso).getUTCDay() === 1
 
-  const categoryCounts = (currentPicks) => {
+  // Count categories
+  const counts = (map) => {
     let th = 0, mo = 0, be = 0
-    Object.keys(currentPicks).forEach((id) => {
+    Object.keys(map).forEach((id) => {
       const g = games.find((x) => x.id === id)
-      if (g) {
-        if (isThursday(g.kickoff_time)) th++
-        else if (isMonday(g.kickoff_time)) mo++
-        else be++
-      }
+      if (!g) return
+      if (isThursday(g.kickoff_time)) th++
+      else if (isMonday(g.kickoff_time)) mo++
+      else be++
     })
     return { th, mo, be }
   }
 
-  // toggle pick
+  // Toggle pick & auto-hide game when picked
   const handlePick = (gid, team) => {
     setStatus(null)
     const copy = { ...picks }
@@ -57,16 +57,15 @@ export default function PickSubmission() {
       return
     }
 
-    // enforce max total 5
-    const total = Object.keys(copy).length
-    if (total >= 5) {
-      setStatus('🚫 You can select up to 5 games total.')
+    // enforce total ≤5
+    if (Object.keys(copy).length >= 5) {
+      setStatus('🚫 You can only pick up to 5 games total.')
       return
     }
 
     // enforce category caps
     const tmp = { ...copy, [gid]: team }
-    const { th, mo, be } = categoryCounts(tmp)
+    const { th, mo, be } = counts(tmp)
     if (th > 1) {
       setStatus('🚫 Only 1 Thursday pick allowed.')
       return
@@ -76,21 +75,21 @@ export default function PickSubmission() {
       return
     }
     if (be > 3) {
-      setStatus('🚫 Only 3 “Best Choice” (non-Thu/Mon) picks allowed.')
+      setStatus('🚫 Only 3 “Best Choice” picks allowed.')
       return
     }
 
-    // ok
+    // commit pick (and game will auto-disappear)
     copy[gid] = team
     setPicks(copy)
   }
 
-  // toggle lock
+  // Toggle lock
   const handleLock = (gid) => {
     setLockPick(lockPick === gid ? null : gid)
   }
 
-  // save
+  // Save picks
   const save = async () => {
     const inserts = Object.entries(picks).map(([gid, team]) => ({
       user_email: email,
@@ -107,18 +106,21 @@ export default function PickSubmission() {
     }
   }
 
-  // submit: just call save (we enforce caps on selection)
+  // Submit
   const submitPicks = () => {
     if (!email) {
-      setStatus('🚫 Please enter your email.')
+      setStatus('🚫 Please enter your email!')
       return
     }
-    if (!Object.keys(picks).length) {
+    if (Object.keys(picks).length === 0) {
       setStatus('🚫 Please select at least one game.')
       return
     }
     save()
   }
+
+  // Only show games not already picked
+  const available = games.filter((g) => !(g.id in picks))
 
   return (
     <div style={{ padding: 20 }}>
@@ -133,7 +135,7 @@ export default function PickSubmission() {
         style={{ marginBottom: 16, width: 300 }}
       />
 
-      {games.map((g) => (
+      {available.map((g) => (
         <div key={g.id} style={{ marginBottom: 12 }}>
           <strong>
             {g.away_team} @ {g.home_team} ({g.spread}) —{' '}
@@ -143,7 +145,7 @@ export default function PickSubmission() {
               minute: '2-digit'
             })}
           </strong>
-          <br/>
+          <br />
           <label>
             <input
               type="radio"
