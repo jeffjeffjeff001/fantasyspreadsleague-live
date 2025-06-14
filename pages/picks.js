@@ -15,24 +15,42 @@ export default function PickSubmission() {
   const [lockPick, setLockPick] = useState(null)
   const [status, setStatus]     = useState(null)
 
-  // Load Week 1 games once
+  // Helper to filter only future games
+  const filterFuture = (list) => {
+    const now = new Date()
+    return list.filter((g) => new Date(g.kickoff_time) > now)
+  }
+
+  // 1) Fetch all week-1 games on mount, keep only future ones
   useEffect(() => {
-    supabase
-      .from('games')
-      .select('*')
-      .eq('week', 1)
-      .order('kickoff_time', { ascending: true })
-      .then(({ data, error }) => {
-        if (error) setStatus(`🚫 ${error.message}`)
-        else setGames(data || [])
-      })
+    async function fetchGames() {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .eq('week', 1)
+        .order('kickoff_time', { ascending: true })
+      if (error) {
+        setStatus(`🚫 ${error.message}`)
+      } else {
+        setGames(filterFuture(data || []))
+      }
+    }
+    fetchGames()
   }, [])
 
-  // Helpers
+  // 2) Every 30s, remove any games whose kickoff_time has passed
+  useEffect(() => {
+    const tid = setInterval(() => {
+      setGames((prev) => filterFuture(prev))
+    }, 30000)
+    return () => clearInterval(tid)
+  }, [])
+
+  // Day‐of‐week helpers
   const isThursday = (iso) => new Date(iso).getUTCDay() === 4
   const isMonday   = (iso) => new Date(iso).getUTCDay() === 1
 
-  // Count how many picks fall in each category
+  // Count categories in a pick‐map
   const countCats = (map) => {
     let th = 0, mo = 0, be = 0
     Object.keys(map).forEach((id) => {
@@ -45,93 +63,73 @@ export default function PickSubmission() {
     return { th, mo, be }
   }
 
-  // Toggle a pick (no removal of games yet)
+  // Toggle a pick (enforce caps)
   const handlePick = (gid, team) => {
     setStatus(null)
     const copy = { ...picks }
 
-    // un-select
+    // un-select if same
     if (copy[gid] === team) {
       delete copy[gid]
       setPicks(copy)
       return
     }
 
-    // enforce total ≤5
+    // total cap
     if (Object.keys(copy).length >= 5) {
-      setStatus('🚫 You can only pick up to 5 games total.')
+      setStatus('🚫 You can only pick up to 5 games.')
       return
     }
 
-    // enforce category caps
+    // category caps
     const tmp = { ...copy, [gid]: team }
     const { th, mo, be } = countCats(tmp)
-    if (th > 1) {
-      setStatus('🚫 Only 1 Thursday pick allowed.')
-      return
-    }
-    if (mo > 1) {
-      setStatus('🚫 Only 1 Monday pick allowed.')
-      return
-    }
-    if (be > 3) {
-      setStatus('🚫 Only 3 “Best Choice” picks allowed.')
-      return
-    }
+    if (th > 1)      { setStatus('🚫 Only 1 Thursday pick allowed.'); return }
+    if (mo > 1)      { setStatus('🚫 Only 1 Monday pick allowed.');   return }
+    if (be > 3)      { setStatus('🚫 Only 3 “Best Choice” picks allowed.'); return }
 
-    // commit pick
     copy[gid] = team
     setPicks(copy)
   }
 
-  // Toggle lock on/off
+  // Toggle lock
   const handleLock = (gid) => {
     setLockPick(lockPick === gid ? null : gid)
   }
 
-  // Persist picks to Supabase, then remove those games from the list
+  // Save & then remove submitted games
   const savePicks = async () => {
     const entries = Object.entries(picks)
-    if (!entries.length) return
-
-    // build insert payload
     const inserts = entries.map(([gid, team]) => ({
       user_email: email,
       game_id: gid,
       selected_team: team,
       is_lock: gid === lockPick
     }))
-
-    // insert
     const { error } = await supabase.from('picks').insert(inserts)
     if (error) {
       setStatus(`🚫 ${error.message}`)
       return
     }
-
-    // success: remove those games from our local list
+    // on success, remove those games from the list
     const submittedIds = entries.map(([gid]) => gid)
     setGames((prev) => prev.filter((g) => !submittedIds.includes(g.id)))
-
-    // reset picks + lock
     setPicks({})
     setLockPick(null)
-    setStatus('✅ Picks submitted and removed from list.')
+    setStatus('✅ Picks submitted—those games are now hidden.')
   }
 
-  // Validate then save
+  // Validate email & at least one pick, then save
   const submitPicks = () => {
     setStatus(null)
     if (!email) {
       setStatus('🚫 Please enter your email.')
       return
     }
-    const total = Object.keys(picks).length
-    if (total === 0) {
+    if (!Object.keys(picks).length) {
       setStatus('🚫 Please select at least one game.')
       return
     }
-    // all constraints are enforced on pick action, so just save
     savePicks()
   }
 
@@ -158,7 +156,7 @@ export default function PickSubmission() {
               minute: '2-digit'
             })}
           </strong>
-          <br/>
+          <br />
           <label>
             <input
               type="radio"
