@@ -9,124 +9,151 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY
 const supabase    = createClient(supabaseUrl, supabaseKey)
 
 export default function AdminUpload() {
-  // State for selected week, default to 1
   const [selectedWeek, setSelectedWeek] = useState(1)
-  // State to hold existing games fetched from Supabase for that week
   const [existingGames, setExistingGames] = useState([])
-  // State to manage new‐game input rows (home/away/spread/time)
-  const [newGames, setNewGames] = useState([
-    { home: '', away: '', spread: '', time: '' }
-  ])
+  const [newGames, setNewGames] = useState([{ home: '', away: '', spread: '', time: '' }])
+  const [upcomingPicks, setUpcomingPicks] = useState([])
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  // Fetch existing games whenever selectedWeek changes
+  // Load games + upcoming picks for the week
   useEffect(() => {
-    async function fetchExisting() {
+    async function loadData() {
       setLoading(true)
+      setStatus(null)
       try {
-        const { data, error } = await supabase
+        // 1) Games
+        const { data: gamesData, error: gErr } = await supabase
           .from('games')
           .select('*')
           .eq('week', selectedWeek)
           .order('kickoff_time', { ascending: true })
-        if (error) throw error
-        setExistingGames(data || [])
+        if (gErr) throw gErr
+        setExistingGames(gamesData || [])
+
+        // 2) Picks for games not yet kicked off
+        const nowISO = new Date().toISOString()
+        const { data: picksData, error: pErr } = await supabase
+          .from('picks')
+          .select(`
+            id,
+            user_email,
+            selected_team,
+            is_lock,
+            games ( id, home_team, away_team, kickoff_time )
+          `)
+          .eq('games.week', selectedWeek)
+          .gte('kickoff_time', nowISO, { foreignTable: 'games' })
+          .order('kickoff_time', { ascending: true, foreignTable: 'games' })
+        if (pErr) throw pErr
+        setUpcomingPicks(picksData || [])
       } catch (err) {
-        console.error('Error fetching games:', err)
-        setStatus(`🚫 Error loading games: ${err.message}`)
+        console.error(err)
+        setStatus(`🚫 Error loading data: ${err.message}`)
       } finally {
         setLoading(false)
       }
     }
-    fetchExisting()
+    loadData()
   }, [selectedWeek])
 
-  // Handle deleting a single game by id
+  // Delete a single game (cascade by first removing its picks)
   const handleDeleteGame = async (gameId) => {
+    if (!confirm('Delete this game and all its picks?')) return
     setLoading(true)
     try {
-      const { error } = await supabase
-        .from('games')
-        .delete()
-        .eq('id', gameId)
-      if (error) throw error
-      // Refresh list
-      setExistingGames((prev) => prev.filter((g) => g.id !== gameId))
-      setStatus('✅ Deleted game successfully.')
+      // 1) Delete picks for this game
+      let { error: pickErr } = await supabase.from('picks').delete().eq('game_id', gameId)
+      if (pickErr) throw pickErr
+      // 2) Delete the game
+      let { error: gameErr } = await supabase.from('games').delete().eq('id', gameId)
+      if (gameErr) throw gameErr
+      // Update UI
+      setExistingGames((g) => g.filter((x) => x.id !== gameId))
+      setUpcomingPicks((p) => p.filter((x) => x.games.id !== gameId))
+      setStatus('✅ Game and its picks deleted.')
     } catch (err) {
-      console.error('Error deleting game:', err)
-      setStatus(`🚫 Error deleting: ${err.message}`)
+      console.error(err)
+      setStatus(`🚫 ${err.message}`)
     } finally {
       setLoading(false)
     }
   }
 
-  // Clear all games for this week
+  // Clear all games & their picks for the week
   const handleClearWeek = async () => {
-    if (!confirm(`Are you sure you want to delete ALL games for Week ${selectedWeek}?`)) {
-      return
-    }
+    if (!confirm(`Clear ALL games & picks for Week ${selectedWeek}?`)) return
     setLoading(true)
     try {
-      const { error } = await supabase
-        .from('games')
-        .delete()
-        .eq('week', selectedWeek)
-      if (error) throw error
+      // Get IDs
+      const ids = existingGames.map((g) => g.id)
+      if (ids.length) {
+        // 1) Delete all picks for these games
+        let { error: pickErr } = await supabase.from('picks').delete().in('game_id', ids)
+        if (pickErr) throw pickErr
+        // 2) Delete the games
+        let { error: gameErr } = await supabase.from('games').delete().in('id', ids)
+        if (gameErr) throw gameErr
+      }
+      // Reset UI
       setExistingGames([])
-      setStatus(`✅ Cleared all games for Week ${selectedWeek}.`)
+      setUpcomingPicks([])
+      setStatus(`✅ Cleared Week ${selectedWeek} games & picks.`)
     } catch (err) {
-      console.error('Error clearing week:', err)
-      setStatus(`🚫 Error clearing: ${err.message}`)
+      console.error(err)
+      setStatus(`🚫 ${err.message}`)
     } finally {
       setLoading(false)
     }
   }
 
-  // Handle input change for new game rows
-  const handleNewGameChange = (idx, field, value) => {
+  // Delete a single upcoming pick
+  const handleDeletePick = async (pickId) => {
+    if (!confirm('Delete this pick?')) return
+    setLoading(true)
+    try {
+      let { error } = await supabase.from('picks').delete().eq('id', pickId)
+      if (error) throw error
+      setUpcomingPicks((p) => p.filter((x) => x.id !== pickId))
+      setStatus('✅ Pick deleted.')
+    } catch (err) {
+      console.error(err)
+      setStatus(`🚫 ${err.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // New‐game form handlers
+  const handleNewGameChange = (i, field, v) => {
     const copy = [...newGames]
-    copy[idx][field] = value
+    copy[i][field] = v
     setNewGames(copy)
   }
-
-  // Add a blank new‐game row
-  const addNewGameRow = () => {
+  const addNewGameRow = () =>
     setNewGames([...newGames, { home: '', away: '', spread: '', time: '' }])
-  }
 
-  // Submit all new games for this week
+  // Submit new games for the week
   const submitNewGames = async () => {
-    setStatus(null)
     setLoading(true)
+    setStatus(null)
     try {
-      // Build array of insert objects, injecting selectedWeek
-      const inserts = newGames.map((game) => ({
-        home_team: game.home,
-        away_team: game.away,
-        spread: parseFloat(game.spread) || 0,
-        kickoff_time: game.time,      // Save as‐is to avoid timezone shift
+      const inserts = newGames.map((g) => ({
+        home_team: g.home,
+        away_team: g.away,
+        spread: parseFloat(g.spread) || 0,
+        kickoff_time: g.time,
         week: selectedWeek
       }))
-      const { error } = await supabase.from('games').insert(inserts)
+      let { error } = await supabase.from('games').insert(inserts)
       if (error) throw error
-
-      // Refresh existingGames by refetching
-      const { data: fresh, error: fetchError } = await supabase
-        .from('games')
-        .select('*')
-        .eq('week', selectedWeek)
-        .order('kickoff_time', { ascending: true })
-      if (fetchError) throw fetchError
-      setExistingGames(fresh || [])
-
-      // Reset new‐game inputs to a single blank row
+      setStatus('✅ New games added.')
       setNewGames([{ home: '', away: '', spread: '', time: '' }])
-      setStatus('✅ New games added successfully!')
+      // Refresh via effect
+      setSelectedWeek(selectedWeek)
     } catch (err) {
-      console.error('Error inserting new games:', err)
-      setStatus(`🚫 Error adding games: ${err.message}`)
+      console.error(err)
+      setStatus(`🚫 ${err.message}`)
     } finally {
       setLoading(false)
     }
@@ -134,21 +161,15 @@ export default function AdminUpload() {
 
   return (
     <div style={{ padding: 20 }}>
-      <h2>Upload & Manage Week {selectedWeek} Games</h2>
-
-      {/* Return Home */}
+      <h2>Manage Week {selectedWeek} Games & Picks</h2>
       <p>
-        <Link href="/">
-          <a style={{ color: '#0070f3', textDecoration: 'underline' }}>
-            ← Return Home
-          </a>
-        </Link>
+        <Link href="/"><a>← Return Home</a></Link>
       </p>
 
-      {/* Week Selector */}
-      <div style={{ marginBottom: 16 }}>
+      {/* Week selector */}
+      <div>
         <label>
-          Select Week:&nbsp;
+          Week:&nbsp;
           <input
             type="number"
             min="1"
@@ -157,111 +178,127 @@ export default function AdminUpload() {
             style={{ width: 60 }}
           />
         </label>
-        &nbsp;
         <button onClick={() => setSelectedWeek(selectedWeek)} disabled={loading}>
-          Load Games
+          Load
         </button>
       </div>
 
-      {/* Show Existing Games for This Week */}
-      <div style={{ marginBottom: 20 }}>
-        <h3>Existing Games (Week {selectedWeek})</h3>
+      {/* Existing Games */}
+      <section style={{ marginTop: 20 }}>
+        <h3>Existing Games</h3>
         {loading ? (
           <p>Loading…</p>
         ) : existingGames.length ? (
-          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
               <tr>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Matchup</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Spread</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Kickoff Time</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Actions</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Matchup</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Spread</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Kickoff</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Delete</th>
               </tr>
             </thead>
             <tbody>
               {existingGames.map((g) => (
                 <tr key={g.id}>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>
+                  <td style={{border:'1px solid #ccc',padding:8}}>
                     {g.away_team} @ {g.home_team}
                   </td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{g.spread}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>
-                    {new Date(g.kickoff_time).toLocaleString(undefined, {
-                      weekday: 'short',
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                  <td style={{border:'1px solid #ccc',padding:8}}>{g.spread}</td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>
+                    {new Date(g.kickoff_time).toLocaleString()}
                   </td>
-                  <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
-                    <button onClick={() => handleDeleteGame(g.id)} disabled={loading}>
-                      Delete
-                    </button>
+                  <td style={{border:'1px solid #ccc',padding:8, textAlign:'center'}}> 
+                    <button onClick={()=>handleDeleteGame(g.id)} disabled={loading}>X</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
-          <p>No games loaded for Week {selectedWeek}.</p>
+          <p>No games for this week.</p>
         )}
 
-        {/* Clear All Games for This Week */}
         {existingGames.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <button onClick={handleClearWeek} disabled={loading}>
-              🗑️ Clear All Games for Week {selectedWeek}
-            </button>
-          </div>
+          <button onClick={handleClearWeek} disabled={loading} style={{marginTop:8}}>
+            Clear All Games & Picks
+          </button>
         )}
-      </div>
+      </section>
+
+      {/* Upcoming Picks */}
+      <section style={{ marginTop: 40 }}>
+        <h3>Manage Upcoming Picks</h3>
+        {upcomingPicks.length ? (
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{border:'1px solid #ccc',padding:8}}>User</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Matchup</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Pick</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Lock?</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              {upcomingPicks.map((p) => (
+                <tr key={p.id}>
+                  <td style={{border:'1px solid #ccc',padding:8}}>{p.user_email}</td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>
+                    {p.games.away_team} @ {p.games.home_team}
+                  </td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>{p.selected_team}</td>
+                  <td style={{border:'1px solid #ccc',padding:8,textAlign:'center'}}>
+                    {p.is_lock ? '✅' : ''}
+                  </td>
+                  <td style={{border:'1px solid #ccc',padding:8,textAlign:'center'}}>
+                    <button onClick={()=>handleDeletePick(p.id)} disabled={loading}>X</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>No upcoming picks to manage.</p>
+        )}
+      </section>
 
       {/* Add New Games */}
-      <div style={{ marginBottom: 16 }}>
-        <h3>Add New Games for Week {selectedWeek}</h3>
-        {newGames.map((game, idx) => (
-          <div key={idx} style={{ marginBottom: 10 }}>
+      <section style={{ marginTop: 40 }}>
+        <h3>Add New Games</h3>
+        {newGames.map((g, i) => (
+          <div key={i} style={{ marginBottom: 8 }}>
             <input
-              placeholder="Home Team"
-              value={game.home}
-              onChange={(e) => handleNewGameChange(idx, 'home', e.target.value)}
-              style={{ marginRight: 8 }}
+              placeholder="Home"
+              value={g.home}
+              onChange={(e)=>handleNewGameChange(i,'home',e.target.value)}
+              style={{ marginRight:8 }}
             />
             <input
-              placeholder="Away Team"
-              value={game.away}
-              onChange={(e) => handleNewGameChange(idx, 'away', e.target.value)}
-              style={{ marginRight: 8 }}
+              placeholder="Away"
+              value={g.away}
+              onChange={(e)=>handleNewGameChange(i,'away',e.target.value)}
+              style={{ marginRight:8 }}
             />
             <input
               placeholder="Spread"
-              value={game.spread}
-              onChange={(e) => handleNewGameChange(idx, 'spread', e.target.value)}
-              style={{ width: 60, marginRight: 8 }}
+              value={g.spread}
+              onChange={(e)=>handleNewGameChange(i,'spread',e.target.value)}
+              style={{ width:60, marginRight:8 }}
             />
             <input
               type="datetime-local"
-              placeholder="Kickoff Time"
-              value={game.time}
-              onChange={(e) => handleNewGameChange(idx, 'time', e.target.value)}
-              style={{ marginRight: 8 }}
+              value={g.time}
+              onChange={(e)=>handleNewGameChange(i,'time',e.target.value)}
+              style={{ marginRight:8 }}
             />
           </div>
         ))}
-        <button onClick={addNewGameRow} disabled={loading} style={{ marginRight: 12 }}>
-          + Add Another Game
-        </button>
-        <button onClick={submitNewGames} disabled={loading}>
-          Submit New Games
-        </button>
-      </div>
+        <button onClick={addNewGameRow} disabled={loading} style={{ marginRight:8 }}>+ New Row</button>
+        <button onClick={submitNewGames} disabled={loading}>Submit Games</button>
+      </section>
 
-      {/* Status Message */}
-      {status && (
-        <p style={{ marginTop: 16, whiteSpace: 'pre-wrap' }}>{status}</p>
-      )}
+      {status && <p style={{ marginTop:20 }}>{status}</p>}
     </div>
   )
 }
