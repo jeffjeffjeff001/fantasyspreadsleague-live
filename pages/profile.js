@@ -3,31 +3,39 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 
-// Initialize Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY
-const supabase    = createClient(supabaseUrl, supabaseKey)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_KEY
+)
 
 export default function UserProfile() {
-  const [email, setEmail]         = useState('')
-  const [picks, setPicks]         = useState([])
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState(null)
+  const [selectedWeek, setSelectedWeek] = useState(1)
+  const [email, setEmail]               = useState('')
+  const [picks, setPicks]               = useState([])
+  const [warning, setWarning]           = useState('')
+  const [error, setError]               = useState(null)
+  const [loading, setLoading]           = useState(false)
+
+  // day-of-week helper: 0=Sun,1=Mon…4=Thu
+  const getDow = (iso) => new Date(iso).getUTCDay()
 
   const loadPicks = async () => {
     setLoading(true)
     setError(null)
+    setWarning('')
     setPicks([])
 
     try {
-      // ── IMPORTANT CHANGE HERE ── 
-      // Use `order('kickoff_time', { foreignTable: 'games' })` instead of
-      // `order('games.kickoff_time', ...)`.
+      // 1) fetch user’s picks joined with games for that week
       const { data, error } = await supabase
         .from('picks')
         .select(`
-          *,
+          id,
+          user_email,
+          selected_team,
+          is_lock,
           games (
+            id,
             home_team,
             away_team,
             spread,
@@ -36,13 +44,36 @@ export default function UserProfile() {
           )
         `)
         .eq('user_email', email)
-        .eq('games.week', 1)
-        .order('kickoff_time', { ascending: true, foreignTable: 'games' })
+        .eq('games.week', selectedWeek)
+        .order('games.kickoff_time', { ascending: true, foreignTable: 'games' })
 
       if (error) throw error
-      setPicks(data || [])
+
+      // 2) bucket into Thu, Mon, Best
+      const thu = []
+      const mon = []
+      const best = []
+
+      data.forEach((pick) => {
+        const dow = getDow(pick.games.kickoff_time)
+        if (dow === 4) {
+          if (thu.length < 1) thu.push(pick)
+        } else if (dow === 1) {
+          if (mon.length < 1) mon.push(pick)
+        } else {
+          if (best.length < 3) best.push(pick)
+        }
+      })
+
+      const filtered = [...thu, ...mon, ...best]
+      if (filtered.length < data.length) {
+        setWarning(
+          '⚠️ Only 1 Thursday + 1 Monday + up to 3 non-Thu/Mon picks are shown.'
+        )
+      }
+      setPicks(filtered)
     } catch (err) {
-      console.error('Error loading picks:', err)
+      console.error(err)
       setError(err.message)
     } finally {
       setLoading(false)
@@ -51,24 +82,44 @@ export default function UserProfile() {
 
   return (
     <div style={{ padding: 20 }}>
-      <h2>Your Profile & Picks (Week 1)</h2>
+      <h2>Your Profile & Picks</h2>
       <p>
-        <Link href="/">
-          <a style={{ color: '#0070f3', textDecoration: 'underline' }}>← Return Home</a>
-        </Link>
+        <Link href="/"><a>← Return Home</a></Link>
       </p>
 
-      <input
-        type="email"
-        placeholder="Enter your email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        style={{ marginRight: 8, width: 300 }}
-      />
-      <button onClick={loadPicks} disabled={!email || loading}>
-        {loading ? 'Loading…' : 'Load My Picks'}
-      </button>
-      {error && <p style={{ color: 'red', marginTop: 12 }}>{error}</p>}
+      {/* Week selector */}
+      <div style={{ marginBottom: 16 }}>
+        <label>
+          Week:&nbsp;
+          <input
+            type="number"
+            min="1"
+            value={selectedWeek}
+            onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10) || 1)}
+            style={{ width: 60 }}
+          />
+        </label>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <input
+          type="email"
+          placeholder="Enter your email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ marginRight: 8, width: 260 }}
+        />
+        <button onClick={loadPicks} disabled={!email || loading}>
+          {loading ? 'Loading…' : `Load Week ${selectedWeek} Picks`}
+        </button>
+      </div>
+
+      {error && (
+        <p style={{ color: 'red', marginTop: 12 }}>Error: {error}</p>
+      )}
+      {warning && (
+        <p style={{ color: '#a67c00', marginTop: 12 }}>{warning}</p>
+      )}
 
       {picks.length > 0 ? (
         <table style={{ marginTop: 20, borderCollapse: 'collapse' }}>
@@ -112,7 +163,7 @@ export default function UserProfile() {
           </tbody>
         </table>
       ) : (
-        !loading && <p style={{ marginTop: 20 }}>No picks found for this email.</p>
+        !loading && <p>No picks found for Week {selectedWeek}.</p>
       )}
     </div>
   )
