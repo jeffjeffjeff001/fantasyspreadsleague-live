@@ -16,7 +16,8 @@ export default function UserProfile() {
   const [error, setError]               = useState(null)
   const [loading, setLoading]           = useState(false)
 
-  const getDow = (iso) => new Date(iso).getUTCDay()  // 0=Sun … 4=Thu
+  // day-of-week helper: 0=Sun … 4=Thu
+  const getDow = (iso) => new Date(iso).getUTCDay()
 
   const loadPicks = async () => {
     setLoading(true)
@@ -25,7 +26,7 @@ export default function UserProfile() {
     setPicks([])
 
     try {
-      // Fetch picks joined to games, filtering by selectedWeek
+      // 1) fetch joined picks+games for that week
       const { data, error } = await supabase
         .from('picks')
         .select(`
@@ -43,12 +44,11 @@ export default function UserProfile() {
         `)
         .eq('user_email', email)
         .eq('games.week', selectedWeek)
-        // FIX: order by kickoff_time on the games table
         .order('kickoff_time', { ascending: true, foreignTable: 'games' })
 
       if (error) throw error
 
-      // Bucket into Thu/Mon/Best, max 1 Thu, 1 Mon, 3 Best
+      // 2) bucket into Thu, Mon, Best (caps: 1,1,3)
       const thu = [], mon = [], best = []
       data.forEach((pick) => {
         const dow = getDow(pick.games.kickoff_time)
@@ -61,12 +61,25 @@ export default function UserProfile() {
         }
       })
 
-      const filtered = [...thu, ...mon, ...best]
+      let filtered = [...thu, ...mon, ...best]
+
+      // 3) ensure only one lock: keep first locked, turn off rest
+      let lockFound = false
+      filtered = filtered.map((pick) => {
+        if (pick.is_lock && !lockFound) {
+          lockFound = true
+          return pick
+        }
+        return { ...pick, is_lock: false }
+      })
+
+      // warning if we dropped picks or locks
       if (filtered.length < data.length) {
         setWarning(
-          '⚠️ Only 1 Thursday + 1 Monday + up to 3 non-Thu/Mon picks are shown.'
+          '⚠️ Displaying max of 1 Thursday, 1 Monday, 3 Best-Choice picks.'
         )
       }
+
       setPicks(filtered)
     } catch (err) {
       console.error(err)
@@ -125,10 +138,11 @@ export default function UserProfile() {
           <tbody>
             {picks.map((pick) => {
               const g = pick.games
+              const matchup = `${g.away_team} @ ${g.home_team}`
               return (
                 <tr key={pick.id}>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>
-                    {g.away_team} @ {g.home_team}
+                    {matchup}
                     <br />
                     <small>
                       {new Date(g.kickoff_time).toLocaleString(undefined, {
