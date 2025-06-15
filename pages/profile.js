@@ -16,8 +16,7 @@ export default function UserProfile() {
   const [error, setError]               = useState(null)
   const [loading, setLoading]           = useState(false)
 
-  // day-of-week helper: 0=Sun,1=Mon…4=Thu
-  const getDow = (iso) => new Date(iso).getUTCDay()
+  const getDow = (iso) => new Date(iso).getUTCDay()  // 0=Sun … 4=Thu
 
   const loadPicks = async () => {
     setLoading(true)
@@ -26,12 +25,11 @@ export default function UserProfile() {
     setPicks([])
 
     try {
-      // 1) fetch user’s picks joined with games for that week
+      // Fetch picks joined to games, filtering by selectedWeek
       const { data, error } = await supabase
         .from('picks')
         .select(`
           id,
-          user_email,
           selected_team,
           is_lock,
           games (
@@ -45,15 +43,13 @@ export default function UserProfile() {
         `)
         .eq('user_email', email)
         .eq('games.week', selectedWeek)
-        .order('games.kickoff_time', { ascending: true, foreignTable: 'games' })
+        // FIX: order by kickoff_time on the games table
+        .order('kickoff_time', { ascending: true, foreignTable: 'games' })
 
       if (error) throw error
 
-      // 2) bucket into Thu, Mon, Best
-      const thu = []
-      const mon = []
-      const best = []
-
+      // Bucket into Thu/Mon/Best, max 1 Thu, 1 Mon, 3 Best
+      const thu = [], mon = [], best = []
       data.forEach((pick) => {
         const dow = getDow(pick.games.kickoff_time)
         if (dow === 4) {
@@ -83,9 +79,7 @@ export default function UserProfile() {
   return (
     <div style={{ padding: 20 }}>
       <h2>Your Profile & Picks</h2>
-      <p>
-        <Link href="/"><a>← Return Home</a></Link>
-      </p>
+      <p><Link href="/"><a>← Return Home</a></Link></p>
 
       {/* Week selector */}
       <div style={{ marginBottom: 16 }}>
@@ -101,6 +95,7 @@ export default function UserProfile() {
         </label>
       </div>
 
+      {/* Email + load */}
       <div style={{ marginBottom: 16 }}>
         <input
           type="email"
@@ -114,12 +109,8 @@ export default function UserProfile() {
         </button>
       </div>
 
-      {error && (
-        <p style={{ color: 'red', marginTop: 12 }}>Error: {error}</p>
-      )}
-      {warning && (
-        <p style={{ color: '#a67c00', marginTop: 12 }}>{warning}</p>
-      )}
+      {error && <p style={{ color: 'red', marginTop: 12 }}>Error: {error}</p>}
+      {warning && <p style={{ color: '#a67c00', marginTop: 12 }}>{warning}</p>}
 
       {picks.length > 0 ? (
         <table style={{ marginTop: 20, borderCollapse: 'collapse' }}>
@@ -134,11 +125,10 @@ export default function UserProfile() {
           <tbody>
             {picks.map((pick) => {
               const g = pick.games
-              const matchup = `${g.away_team} @ ${g.home_team}`
               return (
                 <tr key={pick.id}>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>
-                    {matchup}
+                    {g.away_team} @ {g.home_team}
                     <br />
                     <small>
                       {new Date(g.kickoff_time).toLocaleString(undefined, {
