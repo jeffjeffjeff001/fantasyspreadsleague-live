@@ -16,27 +16,47 @@ export default function PickSubmission() {
   const [lockPick, setLockPick]         = useState(null)
   const [status, setStatus]             = useState(null)
 
-  // Load games whenever selectedWeek changes
+  // Helper to get ISO now
+  const nowISO = () => new Date().toISOString()
+
+  // Whenever the week changes, fetch only FUTURE games for that week
   useEffect(() => {
     setStatus(null)
     setPicks({})
     setLockPick(null)
-    supabase
-      .from('games')
-      .select('*')
-      .eq('week', selectedWeek)
-      .order('kickoff_time', { ascending: true })
-      .then(({ data, error }) => {
-        if (error) setStatus(`🚫 ${error.message}`)
-        else setGames(data || [])
-      })
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .eq('week', selectedWeek)
+        // **NEW**: only games whose kickoff_time is after right now
+        .gt('kickoff_time', nowISO())
+        .order('kickoff_time', { ascending: true })
+
+      if (error) {
+        setStatus(`🚫 ${error.message}`)
+      } else {
+        setGames(data || [])
+      }
+    })()
   }, [selectedWeek])
 
-  // Helpers
+  // Also clean up any games that expire while you're on the page
+  useEffect(() => {
+    const tid = setInterval(() => {
+      setGames((prev) =>
+        prev.filter((g) => new Date(g.kickoff_time) > new Date())
+      )
+    }, 30000)
+    return () => clearInterval(tid)
+  }, [])
+
+  // Day‐of‐week helpers
   const isThursday = (iso) => new Date(iso).getUTCDay() === 4
   const isMonday   = (iso) => new Date(iso).getUTCDay() === 1
 
-  // Count how many picks in each category
+  // Count picks in each category
   const countCats = (map) => {
     let th = 0, mo = 0, be = 0
     Object.keys(map).forEach((id) => {
@@ -49,42 +69,41 @@ export default function PickSubmission() {
     return { th, mo, be }
   }
 
-  // Pick toggle
+  // Toggle a pick (with your existing caps)
   const handlePick = (gid, team) => {
     setStatus(null)
     const copy = { ...picks }
 
-    // Un-select
+    // un-select
     if (copy[gid] === team) {
       delete copy[gid]
       setPicks(copy)
       return
     }
 
-    // Total cap ≤ 5
+    // total cap
     if (Object.keys(copy).length >= 5) {
       setStatus('🚫 You can only pick up to 5 games total.')
       return
     }
 
-    // Category caps
+    // category caps
     const tmp = { ...copy, [gid]: team }
     const { th, mo, be } = countCats(tmp)
     if (th > 1)      { setStatus('🚫 Only 1 Thursday pick allowed.'); return }
     if (mo > 1)      { setStatus('🚫 Only 1 Monday pick allowed.');   return }
     if (be > 3)      { setStatus('🚫 Only 3 “Best Choice” picks allowed.'); return }
 
-    // Commit
     copy[gid] = team
     setPicks(copy)
   }
 
-  // Lock toggle
+  // Toggle lock
   const handleLock = (gid) => {
     setLockPick(lockPick === gid ? null : gid)
   }
 
-  // Save and then remove submitted games from list
+  // Save & remove submitted games
   const savePicks = async () => {
     const entries = Object.entries(picks)
     const inserts = entries.map(([gid, team]) => ({
@@ -98,7 +117,6 @@ export default function PickSubmission() {
       setStatus(`🚫 ${error.message}`)
       return
     }
-    // Remove submitted
     const submittedIds = entries.map(([gid]) => gid)
     setGames((prev) => prev.filter((g) => !submittedIds.includes(g.id)))
     setPicks({})
@@ -114,7 +132,7 @@ export default function PickSubmission() {
       return
     }
     if (!Object.keys(picks).length) {
-      setStatus('🚫 Please select at least one game.')
+      setStatus('🚫 Please select at least one game before submitting.')
       return
     }
     savePicks()
@@ -130,15 +148,18 @@ export default function PickSubmission() {
         <label>
           Week:&nbsp;
           <input
-            type="number" min="1"
+            type="number"
+            min="1"
             value={selectedWeek}
-            onChange={(e) => setSelectedWeek(parseInt(e.target.value,10)||1)}
+            onChange={(e) =>
+              setSelectedWeek(parseInt(e.target.value, 10) || 1)
+            }
             style={{ width: 60 }}
           />
         </label>
       </div>
 
-      {/* Email */}
+      {/* Email field */}
       <input
         type="email"
         placeholder="Your email"
@@ -147,16 +168,18 @@ export default function PickSubmission() {
         style={{ marginBottom: 16, width: 300 }}
       />
 
-      {/* Game list */}
+      {/* Game picks list */}
       {games.map((g) => (
         <div key={g.id} style={{ marginBottom: 12 }}>
           <strong>
             {g.away_team} @ {g.home_team} ({g.spread}) —{' '}
             {new Date(g.kickoff_time).toLocaleString(undefined, {
-              weekday: 'short', hour:'2-digit', minute:'2-digit'
+              weekday: 'short',
+              hour: '2-digit',
+              minute: '2-digit'
             })}
           </strong>
-          <br/>
+          <br />
           <label>
             <input
               type="radio"
@@ -166,7 +189,7 @@ export default function PickSubmission() {
             />{' '}
             {g.home_team}
           </label>
-          <label style={{ marginLeft:12 }}>
+          <label style={{ marginLeft: 12 }}>
             <input
               type="radio"
               name={`pick-${g.id}`}
@@ -175,7 +198,7 @@ export default function PickSubmission() {
             />{' '}
             {g.away_team}
           </label>
-          <label style={{ marginLeft:12 }}>
+          <label style={{ marginLeft: 12 }}>
             <input
               type="checkbox"
               checked={lockPick === g.id}
@@ -186,7 +209,7 @@ export default function PickSubmission() {
         </div>
       ))}
 
-      {/* Submit button & status */}
+      {/* Submit & status */}
       <button onClick={submitPicks}>Submit Picks</button>
       {status && (
         <pre style={{ whiteSpace: 'pre-wrap', marginTop: 16 }}>{status}</pre>
