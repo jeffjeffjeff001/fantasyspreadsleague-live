@@ -10,16 +10,16 @@ const supabase = createClient(
 
 export default function PickSubmission() {
   const [selectedWeek, setSelectedWeek] = useState(1)
-  const [games, setGames]               = useState([])      // always an array
+  const [games, setGames]               = useState([])
   const [email, setEmail]               = useState('')
-  const [picks, setPicks]               = useState({})      // { gameId: team }
+  const [picks, setPicks]               = useState({})
   const [lockPick, setLockPick]         = useState(null)
   const [status, setStatus]             = useState(null)
 
-  // get current ISO timestamp
+  // Current timestamp for filtering
   const nowISO = () => new Date().toISOString()
 
-  // load only future games for the selected week
+  // Fetch only future games for the chosen week
   useEffect(() => {
     setStatus(null)
     setPicks({})
@@ -41,7 +41,7 @@ export default function PickSubmission() {
       })
   }, [selectedWeek])
 
-  // helpers
+  // Helpers
   const isThursday = (iso) => new Date(iso).getUTCDay() === 4
   const isMonday   = (iso) => new Date(iso).getUTCDay() === 1
 
@@ -57,6 +57,7 @@ export default function PickSubmission() {
     return { th, mo, be }
   }
 
+  // Handle pick toggle
   const handlePick = (gid, team) => {
     setStatus(null)
     const copy = { ...picks }
@@ -65,11 +66,9 @@ export default function PickSubmission() {
       delete copy[gid]
       return setPicks(copy)
     }
-
     if (Object.keys(copy).length >= 5) {
       return setStatus('🚫 You can only pick up to 5 games total.')
     }
-
     const tmp = { ...copy, [gid]: team }
     const { th, mo, be } = countCats(tmp)
     if (th > 1) return setStatus('🚫 Only 1 Thursday pick allowed.')
@@ -84,6 +83,7 @@ export default function PickSubmission() {
     setLockPick(lockPick === gid ? null : gid)
   }
 
+  // Save picks and remove them from the list
   const savePicks = async () => {
     const entries = Object.entries(picks)
     const inserts = entries.map(([gid, team]) => ({
@@ -106,7 +106,7 @@ export default function PickSubmission() {
 
   const submitPicks = () => {
     setStatus(null)
-    if (!email) return setStatus('🚫 Please enter your email.')
+    if (!email)               return setStatus('🚫 Please enter your email.')
     if (!Object.keys(picks).length) return setStatus('🚫 Please select at least one game.')
     savePicks()
   }
