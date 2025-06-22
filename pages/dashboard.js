@@ -1,0 +1,187 @@
+// pages/dashboard.js
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_KEY
+)
+
+export default function LeagueDashboard() {
+  const [week, setWeek]         = useState(1)
+  const [profiles, setProfiles] = useState([])
+  const [games, setGames]       = useState([])
+  const [picks, setPicks]       = useState([])
+  const [loading, setLoading]   = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([
+      supabase.from('profiles').select('email, username'),
+      supabase.from('games').select('*').eq('week', week),
+      supabase.from('picks').select('user_email, selected_team, is_lock, game_id')
+    ]).then(([{ data: pr }, { data: gm }, { data: pk }]) => {
+      setProfiles(pr || [])
+      setGames(gm || [])
+      setPicks(pk || [])
+      setLoading(false)
+    })
+  }, [week])
+
+  // Map picks by user
+  const picksByUser = profiles.reduce((acc, p) => {
+    acc[p.email] = []
+    return acc
+  }, {})
+  picks.forEach((pick) => {
+    if (games.find((g) => g.id === pick.game_id)) {
+      picksByUser[pick.user_email]?.push(pick)
+    }
+  })
+
+  // Helpers
+  const isCorrect = (pick) => {
+    const game = games.find((g) => g.id === pick.game_id)
+    return game && pick.selected_team === game.result_winner
+  }
+  const isThu = (iso) => new Date(iso).getUTCDay() === 4
+  const isMon = (iso) => new Date(iso).getUTCDay() === 1
+
+  // Weekly scores
+  const weeklyScores = profiles.map((p) => {
+    const userPicks = picksByUser[p.email] || []
+    let correct = 0, lockCorrect = 0
+    userPicks.forEach((pick) => {
+      if (isCorrect(pick)) {
+        if (pick.is_lock) lockCorrect++
+        else correct++
+      }
+    })
+    const perfectBonus = (correct + lockCorrect === 5) ? 3 : 0
+    return {
+      email: p.email,
+      username: p.username,
+      weeklyPoints: correct + lockCorrect * 2 + perfectBonus,
+      correct,
+      lockCorrect
+    }
+  })
+
+  // Leaderboard
+  const leaderboard = [...weeklyScores].sort((a, b) =>
+    b.weeklyPoints !== a.weeklyPoints
+      ? b.weeklyPoints - a.weeklyPoints
+      : b.correct - a.correct
+  )
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>League Dashboard</h1>
+      <p><Link href="/"><a>← Return Home</a></Link></p>
+
+      <div style={{ margin: '20px 0' }}>
+        <label>
+          Week:&nbsp;
+          <input
+            type="number" min="1"
+            value={week}
+            onChange={e => setWeek(parseInt(e.target.value,10) || 1)}
+            style={{ width: 60 }}
+          />
+        </label>
+      </div>
+
+      {loading && <p>Loading data…</p>}
+
+      {/* Weekly Score */}
+      <section style={{ marginBottom: 40 }}>
+        <h2>Weekly Score (Week {week})</h2>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>User</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Score</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Correct</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Locks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {weeklyScores.map((u) => (
+              <tr key={u.email}>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.username}</td>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.weeklyPoints}</td>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.correct}</td>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.lockCorrect}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      {/* Leaderboard */}
+      <section style={{ marginBottom: 40 }}>
+        <h2>League Leaderboard</h2>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Rank</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>User</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Points</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Correct</th>
+            </tr>
+          </thead>
+          <tbody>
+            {leaderboard.map((u, i) => (
+              <tr key={u.email}>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>{i + 1}</td>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.username}</td>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.weeklyPoints}</td>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.correct}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      {/* League Picks */}
+      <section>
+        <h2>League Picks (Week {week})</h2>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>User</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Thursday</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Best-3</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Monday</th>
+            </tr>
+          </thead>
+          <tbody>
+            {profiles.map((p) => {
+              const userPicks = picksByUser[p.email] || []
+              const th = userPicks.find(pk => isThu(games.find(g=>g.id===pk.game_id).kickoff_time))
+              const mo = userPicks.find(pk => isMon(games.find(g=>g.id===pk.game_id).kickoff_time))
+              const best = userPicks
+                .filter(pk => {
+                  const dow = new Date(
+                    games.find(g=>g.id===pk.game_id).kickoff_time
+                  ).getUTCDay()
+                  return dow !== 1 && dow !== 4
+                })
+                .slice(0,3)
+
+              return (
+                <tr key={p.email}>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.username}</td>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{th ? th.selected_team : '–'}</td>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{best.length ? best.map(b=>b.selected_team).join(', ') : '–'}</td>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{mo ? mo.selected_team : '–'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  )
+}
