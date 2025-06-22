@@ -4,25 +4,23 @@ import Link from 'next/link'
 export default function Home() {
   return (
     <div style={{ padding: 20 }}>
-      <h1>Welcome to Fantasy Spreads League</h1>
-      <p>This is the homepage. You can:</p>
-      <ul>
-        <li>
-          <Link href="/admin">
-            <a>Go to Admin (enter weekly games)</a>
-          </Link>
-        </li>
-        <li>
-          <Link href="/picks">
-            <a>Submit Your Picks</a>
-          </Link>
-        </li>
-        <li>
-          <Link href="/profile">
-            <a>View My Profile & Picks</a>
-          </Link>
-        </li>
-      </ul>
+      <h1>Fantasy Spreads League</h1>
+      <nav style={{ marginTop: 20 }}>
+        <ul style={{ listStyle: 'none', padding: 0 }}>
+          <li style={{ marginBottom: 8 }}>
+            <Link href="/admin"><a>Admin Panel</a></Link>
+          </li>
+          <li style={{ marginBottom: 8 }}>
+            <Link href="/picks"><a>Submit Picks</a></Link>
+          </li>
+          <li style={{ marginBottom: 8 }}>
+            <Link href="/profile"><a>Your Profile</a></Link>
+          </li>
+          <li style={{ marginBottom: 8 }}>
+            <Link href="/dashboard"><a>League Dashboard</a></Link>
+          </li>
+        </ul>
+      </nav>
     </div>
   )
 }
