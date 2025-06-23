@@ -6,17 +6,17 @@ import { useAuth } from '../context/AuthContext'
 
 export default function PickSubmission() {
   const { session, profile } = useAuth()
-  const username = profile?.username
+  const username = profile?.username || session?.user?.email
+
   const [selectedWeek, setSelectedWeek] = useState(1)
   const [games, setGames]               = useState([])
   const [picks, setPicks]               = useState({})
   const [lockPick, setLockPick]         = useState(null)
   const [status, setStatus]             = useState(null)
 
-  // Load only future games for the chosen week once user is signed in
+  // Load games once we have a session
   useEffect(() => {
     if (!session) return
-
     const loadGames = async () => {
       setStatus(null)
       setPicks({})
@@ -28,14 +28,29 @@ export default function PickSubmission() {
         .eq('week', selectedWeek)
         .gt('kickoff_time', now)
         .order('kickoff_time', { ascending: true })
+
       if (error) setStatus(`🚫 ${error.message}`)
       else setGames(data || [])
     }
-
     loadGames()
   }, [selectedWeek, session])
 
-  // Helper functions...
+  // Block until profile loaded
+  if (session && !profile) {
+    return <p style={{ padding: 20 }}>Loading your profile…</p>
+  }
+  // Prompt sign-in if no session
+  if (!session) {
+    return (
+      <div style={{ padding: 20 }}>
+        <p>
+          <Link href="/auth"><a>Please sign in to submit picks →</a></Link>
+        </p>
+      </div>
+    )
+  }
+
+  // Helpers
   const isThursday = (iso) => new Date(iso).getUTCDay() === 4
   const isMonday   = (iso) => new Date(iso).getUTCDay() === 1
 
@@ -96,34 +111,24 @@ export default function PickSubmission() {
 
   const submitPicks = () => {
     setStatus(null)
-    if (!session) {
-      setStatus('🚫 Please sign in first.')
-      return
-    }
     if (!Object.keys(picks).length) {
-      setStatus('🚫 Please select at least one game.')
-      return
+      return setStatus('🚫 Please select at least one game.')
     }
     savePicks()
-  }
-
-  if (!session) {
-    return (
-      <div style={{ padding: 20 }}>
-        <p>
-          <Link href="/auth"><a>Please sign in to submit picks →</a></Link>
-        </p>
-      </div>
-    )
   }
 
   return (
     <div style={{ padding: 20 }}>
       <h2>Submit Your Picks</h2>
-      <p>Logged in as <strong>{username}</strong> | <Link href="/"><a>Home</a></Link></p>
+      <p>
+        Logged in as <strong>{username}</strong> |{' '}
+        <Link href="/"><a>Home</a></Link>
+      </p>
 
       {status && (
-        <pre style={{ whiteSpace: 'pre-wrap', marginBottom: 16 }}>{status}</pre>
+        <pre style={{ whiteSpace: 'pre-wrap', marginBottom: 16 }}>
+          {status}
+        </pre>
       )}
 
       <div style={{ marginBottom: 16 }}>
