@@ -14,7 +14,7 @@ export default function PickSubmission() {
   const [lockPick, setLockPick]         = useState(null)
   const [status, setStatus]             = useState(null)
 
-  // Load games once we have a session
+  // Load games once user is signed-in
   useEffect(() => {
     if (!session) return
     const loadGames = async () => {
@@ -35,11 +35,7 @@ export default function PickSubmission() {
     loadGames()
   }, [selectedWeek, session])
 
-  // Block until profile loaded
-  if (session && !profile) {
-    return <p style={{ padding: 20 }}>Loading your profile…</p>
-  }
-  // Prompt sign-in if no session
+  // If not signed in, ask them to
   if (!session) {
     return (
       <div style={{ padding: 20 }}>
@@ -51,13 +47,12 @@ export default function PickSubmission() {
   }
 
   // Helpers
-  const isThursday = (iso) => new Date(iso).getUTCDay() === 4
-  const isMonday   = (iso) => new Date(iso).getUTCDay() === 1
-
-  const countCats = (map) => {
-    let th = 0, mo = 0, be = 0
-    Object.keys(map).forEach((id) => {
-      const g = games.find(x => x.id === id)
+  const isThursday = iso => new Date(iso).getUTCDay() === 4
+  const isMonday   = iso => new Date(iso).getUTCDay() === 1
+  const countCats  = map => {
+    let th=0, mo=0, be=0
+    Object.keys(map).forEach(id => {
+      const g = games.find(x=>x.id===id)
       if (!g) return
       if (isThursday(g.kickoff_time)) th++
       else if (isMonday(g.kickoff_time)) mo++
@@ -85,7 +80,7 @@ export default function PickSubmission() {
     setPicks(copy)
   }
 
-  const handleLock = (gid) => {
+  const handleLock = gid => {
     setLockPick(lockPick === gid ? null : gid)
   }
 
@@ -93,9 +88,9 @@ export default function PickSubmission() {
     const entries = Object.entries(picks)
     const inserts = entries.map(([gid, team]) => ({
       user_email: session.user.email,
-      game_id: gid,
+      game_id:     gid,
       selected_team: team,
-      is_lock: gid === lockPick
+      is_lock:     gid === lockPick
     }))
     const { error } = await supabase.from('picks').insert(inserts)
     if (error) {
@@ -138,7 +133,7 @@ export default function PickSubmission() {
             type="number"
             min="1"
             value={selectedWeek}
-            onChange={e => setSelectedWeek(parseInt(e.target.value, 10) || 1)}
+            onChange={e => setSelectedWeek(parseInt(e.target.value,10)||1)}
             style={{ width: 60 }}
           />
         </label>
@@ -151,35 +146,36 @@ export default function PickSubmission() {
           <div key={g.id} style={{ marginBottom: 12 }}>
             <strong>
               {g.away_team} @ {g.home_team} ({g.spread}) —{' '}
-              {new Date(g.kickoff_time).toLocaleString(undefined, {
-                weekday: 'short',
-                hour: '2-digit',
-                minute: '2-digit'
+              {new Date(g.kickoff_time).toLocaleString(undefined,{
+                weekday:'short',hour:'2-digit',minute:'2-digit'
               })}
             </strong>
-            <br />
+            <br/>
             <label>
               <input
                 type="radio"
                 name={`pick-${g.id}`}
-                checked={picks[g.id] === g.home_team}
-                onClick={() => handlePick(g.id, g.home_team)}
-              /> {g.home_team}
+                checked={picks[g.id]===g.home_team}
+                onClick={()=>handlePick(g.id,g.home_team)}
+              />{' '}
+              {g.home_team}
             </label>
-            <label style={{ marginLeft: 12 }}>
+            <label style={{ marginLeft:12 }}>
               <input
                 type="radio"
                 name={`pick-${g.id}`}
-                checked={picks[g.id] === g.away_team}
-                onClick={() => handlePick(g.id, g.away_team)}
-              /> {g.away_team}
+                checked={picks[g.id]===g.away_team}
+                onClick={()=>handlePick(g.id,g.away_team)}
+              />{' '}
+              {g.away_team}
             </label>
-            <label style={{ marginLeft: 12 }}>
+            <label style={{ marginLeft:12 }}>
               <input
                 type="checkbox"
-                checked={lockPick === g.id}
-                onChange={() => handleLock(g.id)}
-              /> Lock
+                checked={lockPick===g.id}
+                onChange={()=>handleLock(g.id)}
+              />{' '}
+              Lock
             </label>
           </div>
         ))
