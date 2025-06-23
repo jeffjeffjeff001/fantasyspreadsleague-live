@@ -14,10 +14,6 @@ export default function UserProfile() {
   const [error, setError]               = useState(null)
   const [loading, setLoading]           = useState(false)
 
-  // Prevent render until profile loaded
-  if (session && !profile) {
-    return <p style={{ padding: 20 }}>Loading your profile…</p>
-  }
   if (!session) {
     return (
       <div style={{ padding: 20 }}>
@@ -56,23 +52,21 @@ export default function UserProfile() {
     if (error) {
       setError(error.message)
     } else {
-      // Bucket into Thu, Mon, Best-3
       const getDow = iso => new Date(iso).getUTCDay()
       const thu = [], mon = [], best = []
       data.forEach(pick => {
         const dow = getDow(pick.games.kickoff_time)
-        if (dow === 4 && thu.length < 1) thu.push(pick)
-        else if (dow === 1 && mon.length < 1) mon.push(pick)
-        else if (dow !== 1 && dow !== 4 && best.length < 3) best.push(pick)
+        if (dow===4 && thu.length<1) thu.push(pick)
+        else if (dow===1 && mon.length<1) mon.push(pick)
+        else if (dow!==1 && dow!==4 && best.length<3) best.push(pick)
       })
-      // Only one lock
       let lockFound = false
-      const filtered = [...thu, ...mon, ...best].map(pick => {
+      const filtered = [...thu,...mon,...best].map(pick => {
         if (pick.is_lock && !lockFound) {
           lockFound = true
           return pick
         }
-        return { ...pick, is_lock: false }
+        return { ...pick, is_lock:false }
       })
       if (filtered.length < data.length) {
         setWarning('⚠️ Showing max of 1 Thursday, 1 Monday & 3 Best-Choice picks.')
@@ -97,7 +91,7 @@ export default function UserProfile() {
             type="number"
             min="1"
             value={selectedWeek}
-            onChange={e => setSelectedWeek(parseInt(e.target.value, 10) || 1)}
+            onChange={e=>setSelectedWeek(parseInt(e.target.value,10)||1)}
             style={{ width: 60 }}
           />
         </label>
@@ -106,17 +100,17 @@ export default function UserProfile() {
         </button>
       </div>
 
-      {error && <p style={{ color: 'red' }}>Error: {error}</p>}
-      {warning && <p style={{ color: '#a67c00' }}>{warning}</p>}
+      {error && <p style={{ color:'red' }}>Error: {error}</p>}
+      {warning && <p style={{ color:'#a67c00' }}>{warning}</p>}
 
       {picks.length > 0 ? (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse' }}>
           <thead>
             <tr>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Game</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Spread</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Your Pick</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Lock?</th>
+              <th style={{border:'1px solid #ccc',padding:8}}>Game</th>
+              <th style={{border:'1px solid #ccc',padding:8}}>Spread</th>
+              <th style={{border:'1px solid #ccc',padding:8}}>Your Pick</th>
+              <th style={{border:'1px solid #ccc',padding:8}}>Lock?</th>
             </tr>
           </thead>
           <tbody>
@@ -124,24 +118,20 @@ export default function UserProfile() {
               const g = pick.games
               return (
                 <tr key={pick.id}>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>
+                  <td style={{border:'1px solid #ccc',padding:8}}>
                     {g.away_team} @ {g.home_team}
-                    <br />
+                    <br/>
                     <small>
-                      {new Date(g.kickoff_time).toLocaleString(undefined, {
-                        weekday: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit'
+                      {new Date(g.kickoff_time).toLocaleString(undefined,{
+                        weekday:'short',hour:'2-digit',minute:'2-digit'
                       })}
                     </small>
                   </td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>
-                    {g.spread}
-                  </td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>
+                  <td style={{border:'1px solid #ccc',padding:8}}>{g.spread}</td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>
                     {pick.selected_team}
                   </td>
-                  <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
+                  <td style={{border:'1px solid #ccc',padding:8,textAlign:'center'}}>
                     {pick.is_lock ? '✅' : ''}
                   </td>
                 </tr>
@@ -150,7 +140,7 @@ export default function UserProfile() {
           </tbody>
         </table>
       ) : (
-        <p>No picks found for Week {selectedWeek}.</p>
+        !loading && <p>No picks found for Week {selectedWeek}.</p>
       )}
     </div>
   )
