@@ -138,111 +138,48 @@ export default function Admin() {
           <button onClick={handleClearWeek} style={{ marginLeft: 12 }}>Clear Week</button>
         </div>
         {loadingGames ? <p>Loading games…</p> : (
-          <table style={{ width:'100%',borderCollapse:'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th style={{border:'1px solid #ccc',padding:8}}>Away</th>
-                <th style={{border:'1px solid #ccc',padding:8}}>Home</th>
-                <th style={{border:'1px solid #ccc',padding:8}}>Spread</th>
-                <th style={{border:'1px solid #ccc',padding:8}}>Kickoff</th>
-                <th style={{border:'1px solid #ccc',padding:8}}>Actions</th>
+                <th style={{ border: '1px solid #ccc', padding: 8 }}>Away</th>
+                <th style={{ border: '1px solid #ccc', padding: 8 }}>Home</th>
+                <th style={{ border: '1px solid #ccc', padding: 8 }}>Spread</th>
+                <th style={{ border: '1px solid #ccc', padding: 8 }}>Kickoff</th>
+                <th style={{ border: '1px solid #ccc', padding: 8 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {games.map(g => (
                 <tr key={g.id}>
-                  <td style={{border:'1px solid #ccc',padding:8}}>{g.away_team}</td>
-                  <td style={{border:'1px solid #ccc',padding:8}}>{g.home_team}</td>
-                  <td style={{border:'1px solid #ccc',padding:8}}>{g.spread}</td>
-                  <td style={{border:'1px solid #ccc',padding:8}}>{new Date(g.kickoff_time).toLocaleString()}</td>
-                  <td style={{border:'1px solid #ccc',padding:8,textAlign:'center'}}>
-                    <button onClick={()=>handleDeleteGame(g.id)} style={{background:'red',color:'white',border:'none',padding:'6px 12px',cursor:'pointer'}}>Delete</button>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{g.away_team}</td>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{g.home_team}</td>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{g.spread}</td>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{new Date(g.kickoff_time).toLocaleString()}</td>
+                  <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
+                    <button onClick={() => handleDeleteGame(g.id)} style={{ background: 'red', color: 'white', border: 'none', padding: '6px 12px', cursor: 'pointer' }}>
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-        <h3 style={{marginTop:24}}>Add New Game</h3>
-        <div style={{marginBottom:16}}>
-          <input placeholder='Away Team' value={newGame.away} onChange={e=>setNewGame({...newGame,away:e.target.value})} style={{marginRight:8}}/>
-          <input placeholder='Home Team' value={newGame.home} onChange={e=>setNewGame({...newGame,home:e.target.value})} style={{marginRight:8}}/>
-          <input placeholder='Spread' type='number' value={newGame.spread} onChange={e=>setNewGame({...newGame,spread:e.target.value})} style={{width:80,marginRight:8}}/>
-          <input placeholder='Kickoff (ISO)' value={newGame.kickoff} onChange={e=>setNewGame({...newGame,kickoff:e.target.value})} style={{marginRight:8}}/>
+        <h3 style={{ marginTop: 24 }}>Add New Game</h3>
+        <div style={{ marginBottom: 16 }}>
+          <input placeholder='Away Team' value={newGame.away} onChange={e => setNewGame({ ...newGame, away: e.target.value })} style={{ marginRight: 8 }} />
+          <input placeholder='Home Team' value={newGame.home} onChange={e => setNewGame({ ...newGame, home: e.target.value })} style={{ marginRight: 8 }} />
+          <input placeholder='Spread' type='number' value={newGame.spread} onChange={e => setNewGame({ ...newGame, spread: e.target.value })} style={{ width: 80, marginRight: 8 }} />
+          <input placeholder='Kickoff (ISO)' value={newGame.kickoff} onChange={e => setNewGame({ ...newGame, kickoff: e.target.value })} style={{ marginRight: 8 }} />
           <button onClick={handleAddGame}>Add Game</button>
         </div>
       </section>
 
       {/* User Management */}
-      <section style={{marginBottom:40}}>
+      <section style={{ marginBottom: 40 }}>
         <h2>User Management</h2>
         {loadingProfiles ? <p>Loading members…</p> : (
-          <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th style={{border:'1px solid #ccc',padding:8}}>Username</th>
-                <th style={{border:'1px solid #ccc',padding:8}}>Name</th>
-                <th style={{border:'1px solid #ccc',padding:8}}>Email</th>
-                <th style={{border:'1px solid #ccc',padding:8}}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profiles.map(p => (
-                <tr key={p.email}>
-                  <td style={{border:'1px solid #ccc',padding:8}}>{p.username}</td>
-                  <td style={{border:'1px solid #ccc',padding:8}}>{p.first_name} {p.last_name}</td>
-                  <td style={{border:'1px solid #ccc',padding:8}}>{p.email}</td>
-                  <td style={{border:'1px solid #ccc',padding:8,textAlign:'center'}}>
-                    <button onClick={()=>handleDeleteUser(p.email)} style={{background:'red',color:'white',border:'none',padding:'6px 12px',cursor:'pointer'}}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      {/* View User Picks */}
-      <section>
-        <h2>View User Picks</nobr></h2>
-        <div style={{marginBottom:16}}>
-          <label>Username:&nbsp;
-            <select value={userForPicks} onChange={e=>setUserForPicks(e.target.value)}>
-              <option value=''>-- select user --</option>
-              {profiles.map(p=>(<option key={p.email} value={p.email}>{p.username}</option>))}
-            </select>
-          </label>
-          <label style={{marginLeft:12}}>Week:&nbsp;
-            <input type='number' min='1' value={weekForPicks} onChange={e=>setWeekForPicks(parseInt(e.target.value,10)||1)} style={{width:60}}/>
-          </label>
-          <button onClick={loadUserPicks} style={{marginLeft:12}}>Load Picks</button>
-        </div>
-        {loadingPicks ? <p>Loading picks…</p> : (
-          <table style={{width:'100%',borderCollapse:'collapse'}}>
-            <thead>
-              <tr>
-                <th style={{border:'1px solid #ccc',padding:8}}>Game</th>
-                <th style={{border:'1px solid #ccc',padding:8}}>Your Pick</th>
-                <th style={{border:'1px solid #ccc',padding:8}}>Lock?</th>
-              </tr>
-            </thead>
-            <tbody>
-              {userPicks.map((pick, i)=>(
-                <tr key={i}>
-                  <td style={{border:'1px solid #ccc',padding:8}}>
-                    {pick.games.away_team} @ {pick.games.home_team}
-                    <br/>
-                    <small>{new Date(pick.games.kickoff_time).toLocaleString()}</small>
-                  </td>
-                  <td style={{border:'1px solid #ccc',padding:8}}>{pick.selected_team}</td>
-                  <td style={{border:'1px solid #ccc',padding:8,textAlign:'center'}}>{pick.is_lock?'✅':''}</td>
-                </tr>
-              ))}
-              {userPicks.length===0 && <tr><td colSpan={3} style={{padding:8,textAlign:'center'}}>No picks found.</td></tr>}
-            </tbody>
-          </table>
-        )}
-      </section>
-    </div>
-  )
-}
+                <th style...
