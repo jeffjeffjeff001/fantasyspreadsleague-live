@@ -16,35 +16,45 @@ export default function JoinLeague() {
   const handleJoin = async () => {
     setError('')
 
-    // 1) check league password
+    // 1) league password
     if (leaguePassword !== process.env.NEXT_PUBLIC_LEAGUE_PASSWORD) {
       return setError('Incorrect league password.')
     }
 
-    // 2) ensure username is unique
-    const { data: existing } = await supabase
+    // 2) check email uniqueness
+    let { data: existingEmail } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('email', email)
+      .single()
+    if (existingEmail) {
+      return setError('That email has already joined the league.')
+    }
+
+    // 3) check username uniqueness
+    const { data: existingUser } = await supabase
       .from('profiles')
       .select('username')
       .eq('username', username)
       .single()
-    if (existing) {
+    if (existingUser) {
       return setError('Username already taken.')
     }
 
-    // 3) create auth user
+    // 4) sign up auth
     const { error: signErr } = await supabase.auth.signUp(
       { email, password },
       { data: { first_name: firstName, last_name: lastName, username } }
     )
     if (signErr) return setError(signErr.message)
 
-    // 4) insert into profiles table
+    // 5) insert into profiles
     const { error: profErr } = await supabase
       .from('profiles')
       .insert([{ email, username, first_name: firstName, last_name: lastName }])
     if (profErr) return setError(profErr.message)
 
-    // 5) redirect into your app
+    // 6) redirect
     router.push('/picks')
   }
 
@@ -85,7 +95,6 @@ export default function JoinLeague() {
         onChange={e => setPassword(e.target.value)}
         style={{ display: 'block', marginBottom: 8, width: '100%' }}
       />
-
       <input
         type="password"
         placeholder="League Password"
