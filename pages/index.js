@@ -11,6 +11,9 @@ export default function Home() {
             <Link href="/admin"><a>Admin</a></Link>
           </li>
           <li style={{ marginBottom: 8 }}>
+            <Link href="/join"><a>Join League</a></Link>
+          </li>
+          <li style={{ marginBottom: 8 }}>
             <Link href="/picks"><a>Submit Picks</a></Link>
           </li>
           <li style={{ marginBottom: 8 }}>
