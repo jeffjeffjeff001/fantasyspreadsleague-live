@@ -1,192 +1,94 @@
 // pages/admin.js
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '../lib/supabaseClient'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_KEY
-)
+export default function AdminPanel() {
+  const [profiles, setProfiles] = useState([])
+  const [loading, setLoading]   = useState(false)
 
-export default function AdminUpload() {
-  const [selectedWeek, setSelectedWeek] = useState(1)
-  const [gamesList, setGamesList] = useState([])
-  const [newGames, setNewGames] = useState([{ home:'', away:'', spread:'', time:'' }])
-  const [userEmail, setUserEmail] = useState('')
-  const [userPicks, setUserPicks] = useState([])
-  const [status, setStatus] = useState(null)
-  const [loading, setLoading] = useState(false)
+  // load all league members
+  const loadProfiles = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('email, username, first_name, last_name')
+      .order('username', { ascending: true })
+    if (error) {
+      alert('Error loading members: ' + error.message)
+    } else {
+      setProfiles(data)
+    }
+    setLoading(false)
+  }
 
-  // load games when week changes
   useEffect(() => {
-    setLoading(true)
-    supabase
-      .from('games')
-      .select('*')
-      .eq('week', selectedWeek)
-      .order('kickoff_time', { ascending: true })
-      .then(({ data, error }) => {
-        if (error) setStatus(`🚫 ${error.message}`)
-        else setGamesList(data || [])
-        setLoading(false)
-      })
-  }, [selectedWeek])
+    loadProfiles()
+  }, [])
 
-  // delete game + its picks
-  const deleteGame = async (id) => {
-    if (!confirm('Delete this game and its picks?')) return
-    setLoading(true)
-    try {
-      await supabase.from('picks').delete().eq('game_id', id)
-      await supabase.from('games').delete().eq('id', id)
-      setGamesList((g) => g.filter((x) => x.id !== id))
-      setStatus('✅ Game & picks deleted.')
-    } catch (e) {
-      setStatus(`🚫 ${e.message}`)
+  // call our API to delete a profile
+  const handleDelete = async (email) => {
+    if (!confirm(`Really delete ${email}? This cannot be undone.`)) return
+    const res = await fetch('/api/delete-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    })
+    const { error } = await res.json()
+    if (error) {
+      alert('Delete failed: ' + error)
+    } else {
+      alert('User deleted.')
+      loadProfiles()
     }
-    setLoading(false)
-  }
-
-  // clear all games & picks for week
-  const clearWeek = async () => {
-    if (!confirm('Clear ALL games & picks for this week?')) return
-    setLoading(true)
-    try {
-      const ids = gamesList.map((g) => g.id)
-      if (ids.length) {
-        await supabase.from('picks').delete().in('game_id', ids)
-        await supabase.from('games').delete().in('id', ids)
-        setGamesList([])
-      }
-      setStatus('✅ Cleared week.')
-    } catch (e) {
-      setStatus(`🚫 ${e.message}`)
-    }
-    setLoading(false)
-  }
-
-  // add new game rows
-  const addRow = () => setNewGames([...newGames, { home:'', away:'', spread:'', time:'' }])
-  const changeNew = (i, f, v) => {
-    const c = [...newGames]; c[i][f] = v; setNewGames(c)
-  }
-
-  // submit new games
-  const submitNew = async () => {
-    setLoading(true)
-    try {
-      const ins = newGames.map((g) => ({
-        home_team:g.home, away_team:g.away,
-        spread:parseFloat(g.spread)||0, kickoff_time:g.time,
-        week:selectedWeek
-      }))
-      await supabase.from('games').insert(ins)
-      setNewGames([{ home:'', away:'', spread:'', time:'' }])
-      // refresh
-      const { data } = await supabase
-        .from('games')
-        .select('*')
-        .eq('week', selectedWeek)
-        .order('kickoff_time', { ascending: true })
-      setGamesList(data||[])
-      setStatus('✅ Games added.')
-    } catch (e) {
-      setStatus(`🚫 ${e.message}`)
-    }
-    setLoading(false)
-  }
-
-  // load a specific user’s picks
-  const loadUserPicks = () => {
-    setLoading(true)
-    supabase
-      .from('picks')
-      .select('id,user_email,selected_team,is_lock,games(id,home_team,away_team,kickoff_time)')
-      .eq('user_email', userEmail)
-      .eq('games.week', selectedWeek)
-      .order('kickoff_time', { foreignTable:'games', ascending:true })
-      .then(({ data, error }) => {
-        if (error) setStatus(`🚫 ${error.message}`)
-        else setUserPicks(data||[])
-        setLoading(false)
-      })
-  }
-
-  // delete a user pick
-  const deleteUserPick = async (id) => {
-    if (!confirm('Delete this pick?')) return
-    setLoading(true)
-    try {
-      await supabase.from('picks').delete().eq('id', id)
-      setUserPicks((p) => p.filter((x) => x.id !== id))
-      setStatus('✅ Pick deleted.')
-    } catch (e) {
-      setStatus(`🚫 ${e.message}`)
-    }
-    setLoading(false)
   }
 
   return (
-    <div style={{ padding:20 }}>
-      <h2>Admin: Week {selectedWeek}</h2>
+    <div style={{ padding: 20 }}>
+      <h1>Admin Panel</h1>
       <p><Link href="/"><a>← Home</a></Link></p>
 
-      <label>
-        Week:&nbsp;
-        <input
-          type="number"
-          min="1"
-          value={selectedWeek}
-          onChange={(e)=>setSelectedWeek(+e.target.value||1)}
-          style={{width:60}}
-        />
-      </label>
-      <button onClick={()=>setSelectedWeek(selectedWeek)} disabled={loading}>Load</button>
-
-      {/* Games */}
-      <h3>Games</h3>
-      {gamesList.map((g)=>(
-        <div key={g.id} style={{marginBottom:4}}>
-          {g.away_team} @ {g.home_team} –{' '}
-          {new Date(g.kickoff_time).toLocaleString()}
-          <button onClick={()=>deleteGame(g.id)} disabled={loading} style={{marginLeft:8}}>X</button>
-        </div>
-      ))}
-      {gamesList.length>0 && (
-        <button onClick={clearWeek} disabled={loading}>Clear Week</button>
+      <h2>League Members</h2>
+      {loading ? (
+        <p>Loading members…</p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Username</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Name</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Email</th>
+              <th style={{ border: '1px solid #ccc', padding: 8 }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {profiles.map((p) => (
+              <tr key={p.email}>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.username}</td>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>
+                  {p.first_name} {p.last_name}
+                </td>
+                <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.email}</td>
+                <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
+                  <button
+                    onClick={() => handleDelete(p.email)}
+                    style={{ color: 'white', background: 'red', border: 'none', padding: '6px 12px', cursor: 'pointer' }}
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {profiles.length === 0 && (
+              <tr>
+                <td colSpan={4} style={{ padding: 8, textAlign: 'center' }}>
+                  No members found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       )}
-
-      {/* Add */}
-      <h3>Add Games</h3>
-      {newGames.map((g,i)=>(
-        <div key={i} style={{marginBottom:4}}>
-          <input placeholder="Home" value={g.home} onChange={e=>changeNew(i,'home',e.target.value)} />
-          <input placeholder="Away" value={g.away} onChange={e=>changeNew(i,'away',e.target.value)} style={{marginLeft:4}}/>
-          <input placeholder="Spread" value={g.spread} onChange={e=>changeNew(i,'spread',e.target.value)} style={{width:60,marginLeft:4}}/>
-          <input type="datetime-local" value={g.time} onChange={e=>changeNew(i,'time',e.target.value)} style={{marginLeft:4}}/>
-        </div>
-      ))}
-      <button onClick={addRow} disabled={loading}>+ Row</button>
-      <button onClick={submitNew} disabled={loading} style={{marginLeft:4}}>Submit Games</button>
-
-      {/* Manage User Picks */}
-      <h3>Manage User Picks</h3>
-      <input
-        placeholder="User email"
-        value={userEmail}
-        onChange={(e)=>setUserEmail(e.target.value)}
-        style={{marginRight:4}}
-      />
-      <button onClick={loadUserPicks} disabled={loading}>Load Picks</button>
-      {userPicks.map((p)=>(
-        <div key={p.id} style={{marginBottom:4}}>
-          {p.user_email}: {p.games.away_team}@{p.games.home_team} → {p.selected_team}
-          {p.is_lock && ' 🔒'}
-          <button onClick={()=>deleteUserPick(p.id)} disabled={loading} style={{marginLeft:8}}>X</button>
-        </div>
-      ))}
-
-      {status && <p style={{marginTop:20}}>{status}</p>}
     </div>
   )
 }
