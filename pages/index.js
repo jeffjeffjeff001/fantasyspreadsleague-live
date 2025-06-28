@@ -22,6 +22,9 @@ export default function Home() {
           <li style={{ marginBottom: 8 }}>
             <Link href="/dashboard"><a>League Dashboard</a></Link>
           </li>
+          <li style={{ marginBottom: 8 }}>
+            <Link href="/nfl-scores"><a>NFL Scores</a></Link>
+          </li>
         </ul>
       </nav>
     </div>
