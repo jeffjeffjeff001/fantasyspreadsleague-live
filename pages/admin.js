@@ -29,11 +29,8 @@ export default function Admin() {
       .select('*')
       .eq('week', selectedWeek)
       .order('kickoff_time', { ascending: true })
-    if (error) {
-      alert('Error loading games: ' + error.message)
-    } else {
-      setGames(data)
-    }
+    if (error) alert('Error loading games: ' + error.message)
+    else setGames(data)
     setLoadingGames(false)
   }
 
@@ -44,11 +41,8 @@ export default function Admin() {
       .from('profiles')
       .select('email, username, first_name, last_name')
       .order('username', { ascending: true })
-    if (error) {
-      alert('Error loading profiles: ' + error.message)
-    } else {
-      setProfiles(data)
-    }
+    if (error) alert('Error loading profiles: ' + error.message)
+    else setProfiles(data)
     setLoadingProfiles(false)
   }
 
@@ -67,9 +61,8 @@ export default function Admin() {
       kickoff_time: new Date(newGameKickoff).toISOString()
     }
     const { error } = await supabase.from('games').insert([game])
-    if (error) {
-      alert('Error adding game: ' + error.message)
-    } else {
+    if (error) alert('Error adding game: ' + error.message)
+    else {
       setNewGameAway('')
       setNewGameHome('')
       setNewGameSpread('')
@@ -82,22 +75,16 @@ export default function Admin() {
   const handleDeleteGame = async (id) => {
     if (!window.confirm('Delete this game?')) return
     const { error } = await supabase.from('games').delete().eq('id', id)
-    if (error) {
-      alert('Error deleting game: ' + error.message)
-    } else {
-      loadGames()
-    }
+    if (error) alert('Error deleting game: ' + error.message)
+    else loadGames()
   }
 
   // Clear week
   const handleClearWeek = async () => {
     if (!window.confirm('Clear all games for Week ' + selectedWeek + '?')) return
     const { error } = await supabase.from('games').delete().eq('week', selectedWeek)
-    if (error) {
-      alert('Error clearing games: ' + error.message)
-    } else {
-      setGames([])
-    }
+    if (error) alert('Error clearing games: ' + error.message)
+    else setGames([])
   }
 
   // Delete user
@@ -122,28 +109,33 @@ export default function Admin() {
     setLoadingPicks(true)
     const { data, error } = await supabase
       .from('picks')
-      .select('selected_team, is_lock, games(away_team,home_team,kickoff_time)')
+      .select('selected_team, is_lock, games(away_team,home_team,kickoff_time,week)')
       .eq('user_email', userForPicks)
       .eq('games.week', weekForPicks)
-      .order('games.kickoff_time', { ascending: true, foreignTable: 'games' })
-    if (error) {
-      alert('Error loading picks: ' + error.message)
-    } else {
-      setUserPicks(data)
-    }
+      .order('kickoff_time', { foreignTable: 'games', ascending: true })
+    if (error) alert('Error loading picks: ' + error.message)
+    else setUserPicks(data)
     setLoadingPicks(false)
   }
 
   return (
     <div style={{ padding: 20 }}>
       <h1>Admin</h1>
-      <Link href='/'><a>← Home</a></Link>
+      <p><Link href='/'><a>← Home</a></Link></p>
 
       {/* Game Management */}
-      <section style={{ marginTop: 20 }}>
+      <section>
         <h2>Game Management (Week {selectedWeek})</h2>
         <div>
-          <label>Week: <input type='number' min='1' value={selectedWeek} onChange={e => setSelectedWeek(parseInt(e.target.value) || 1)} style={{ width: 60 }} /></label>
+          <label>Week: 
+            <input
+              type='number'
+              min='1'
+              value={selectedWeek}
+              onChange={e => setSelectedWeek(parseInt(e.target.value,10)||1)}
+              style={{ width: 60 }}
+            />
+          </label>
           <button onClick={handleClearWeek} style={{ marginLeft: 12 }}>Clear Week</button>
         </div>
         {loadingGames ? <p>Loading games…</p> : (
@@ -165,7 +157,9 @@ export default function Admin() {
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{g.spread}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{new Date(g.kickoff_time).toLocaleString()}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
-                    <button onClick={() => handleDeleteGame(g.id)} style={{ background: 'red', color: 'white', border: 'none', padding: '6px 12px', cursor: 'pointer' }}>Delete</button>
+                    <button onClick={() => handleDeleteGame(g.id)} style={{ background: 'red', color: 'white', border: 'none', padding: '6px 12px', cursor: 'pointer' }}>
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -201,7 +195,9 @@ export default function Admin() {
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.first_name} {p.last_name}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.email}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
-                    <button onClick={() => handleDeleteUser(p.email)} style={{ background: 'red', color: 'white', border: 'none', padding: '6px 12px', cursor: 'pointer' }}>Delete</button>
+                    <button onClick={() => handleDeleteUser(p.email)} style={{ background: 'red', color: 'white', border: 'none', padding: '6px 12px', cursor: 'pointer' }}>
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -220,7 +216,7 @@ export default function Admin() {
               <option key={p.email} value={p.email}>{p.username}</option>
             ))}
           </select>
-          <input type='number' min='1' value={weekForPicks} onChange={e => setWeekForPicks(parseInt(e.target.value) || 1)} style={{ marginLeft: 8, width: 60 }} />
+          <input type='number' min='1' value={weekForPicks} onChange={e => setWeekForPicks(parseInt(e.target.value,10)||1)} style={{ marginLeft: 8, width: 60 }} />
           <button onClick={loadUserPicks} style={{ marginLeft: 8 }}>Load Picks</button>
         </div>
         {loadingPicks ? <p>Loading picks…</p> : (
@@ -233,20 +229,18 @@ export default function Admin() {
               </tr>
             </thead>
             <tbody>
-              {userPicks.map((pick, i) => (
-                <tr key={i}>
+              {userPicks.map((pick, idx) => (
+                <tr key={idx}>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>
                     {pick.games.away_team} @ {pick.games.home_team}
-                    <br />
+                    <br/>
                     <small>{new Date(pick.games.kickoff_time).toLocaleString()}</small>
                   </td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{pick.selected_team}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>{pick.is_lock ? '✅' : ''}</td>
                 </tr>
               ))}
-              {userPicks.length === 0 && (
-                <tr><td colSpan={3} style={{ padding: 8, textAlign: 'center' }}>No picks found.</td></tr>
-              )}
+              {userPicks.length === 0 && <tr><td colSpan={3} style={{ padding: 8, textAlign: 'center' }}>No picks found.</td></tr>}
             </tbody>
           </table>
         )}
