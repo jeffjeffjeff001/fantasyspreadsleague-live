@@ -106,14 +106,11 @@ export default function Admin() {
 
   // Load user's picks for a week
   const loadUserPicks = async () => {
-    if (!userForPicks) {
-      alert('Please select a user')
-      return
-    }
+    if (!userForPicks) { alert('Please select a user'); return }
     setLoadingPicks(true)
     const { data, error } = await supabase
       .from('picks')
-      .select('id, selected_team, is_lock, games(away_team,home_team,kickoff_time)')
+      .select('id, selected_team, is_lock, games(away_team,home_team,kickoff_time,week)')
       .eq('user_email', userForPicks)
       .eq('games.week', weekForPicks)
       .order('kickoff_time', { foreignTable: 'games', ascending: true })
@@ -185,8 +182,7 @@ export default function Admin() {
                   <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
                     <button onClick={() => handleDeleteGame(g.id)} style={{ background: 'red', color: 'white', padding: '6px 12px', border: 'none' }}>
                       Delete
-                    </button>
-                  </td>
+                    }</td>
                 </tr>
               ))}
             </tbody>
@@ -195,6 +191,4 @@ export default function Admin() {
         <div style={{ marginTop: 12 }}>
           <input placeholder="Away Team" value={newGameAway} onChange={e => setNewGameAway(e.target.value)} style={{ marginRight: 8 }} />
           <input placeholder="Home Team" value={newGameHome} onChange={e => setNewGameHome(e.target.value)} style={{ marginRight: 8 }} />
-          <input placeholder="Spread" type="number" value={newGameSpread} onChange={e => setNewGameSpread(e.target.value)} style={{ width: 80, marginRight: 8 }} />
-          <input placeholder="Kickoff (ISO)" value={newGameKickoff} onChange={e => setNewGameKickoff(e.target.value)} style 
-
+          <input placeholder="Spread" type="number" value={newGameSpread} onChange={
