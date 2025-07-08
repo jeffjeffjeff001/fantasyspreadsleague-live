@@ -1,3 +1,4 @@
+// pages/admin.js
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabaseClient'
@@ -9,23 +10,27 @@ export default function Admin() {
   const [loadingGames, setLoadingGames] = useState(false)
   const [loadingProfiles, setLoadingProfiles] = useState(false)
 
-  // New game form state
+  // New game form
   const [newGameAway, setNewGameAway] = useState('')
   const [newGameHome, setNewGameHome] = useState('')
   const [newGameSpread, setNewGameSpread] = useState('')
   const [newGameKickoff, setNewGameKickoff] = useState('')
 
-  // View user picks state
+  // View picks
   const [userForPicks, setUserForPicks] = useState('')
   const [weekForPicks, setWeekForPicks] = useState(1)
   const [userPicks, setUserPicks] = useState([])
   const [loadingPicks, setLoadingPicks] = useState(false)
 
-  // Weekly scores state
+  // Weekly scores
   const [weeklyScores, setWeeklyScores] = useState([])
   const [loadingScores, setLoadingScores] = useState(false)
 
-  // Load games for selected week
+  useEffect(() => {
+    loadGames()
+    loadProfiles()
+  }, [selectedWeek])
+
   const loadGames = async () => {
     setLoadingGames(true)
     const { data, error } = await supabase
@@ -38,7 +43,6 @@ export default function Admin() {
     setLoadingGames(false)
   }
 
-  // Load all profiles
   const loadProfiles = async () => {
     setLoadingProfiles(true)
     const { data, error } = await supabase
@@ -50,21 +54,14 @@ export default function Admin() {
     setLoadingProfiles(false)
   }
 
-  useEffect(() => {
-    loadGames()
-    loadProfiles()
-  }, [selectedWeek])
-
-  // Add a new game
   const handleAddGame = async () => {
-    const game = {
+    const { error } = await supabase.from('games').insert([{
       week: selectedWeek,
       away_team: newGameAway,
       home_team: newGameHome,
       spread: parseFloat(newGameSpread),
       kickoff_time: new Date(newGameKickoff).toISOString(),
-    }
-    const { error } = await supabase.from('games').insert([game])
+    }])
     if (error) alert('Error adding game: ' + error.message)
     else {
       setNewGameAway('')
@@ -75,7 +72,6 @@ export default function Admin() {
     }
   }
 
-  // Delete a game
   const handleDeleteGame = async (id) => {
     if (!confirm('Delete this game?')) return
     const { error } = await supabase.from('games').delete().eq('id', id)
@@ -83,7 +79,6 @@ export default function Admin() {
     else loadGames()
   }
 
-  // Clear all games for a week
   const handleClearWeek = async () => {
     if (!confirm(`Clear all games for Week ${selectedWeek}?`)) return
     const { error } = await supabase.from('games').delete().eq('week', selectedWeek)
@@ -91,7 +86,6 @@ export default function Admin() {
     else setGames([])
   }
 
-  // Delete a user profile
   const handleDeleteUser = async (email) => {
     if (!confirm(`Delete user ${email}?`)) return
     const res = await fetch('/api/delete-profile', {
@@ -104,13 +98,12 @@ export default function Admin() {
     else loadProfiles()
   }
 
-  // Load user's picks for a week
   const loadUserPicks = async () => {
-    if (!userForPicks) { alert('Please select a user'); return }
+    if (!userForPicks) return alert('Please select a user')
     setLoadingPicks(true)
     const { data, error } = await supabase
       .from('picks')
-      .select('id, selected_team, is_lock, games(away_team,home_team,kickoff_time,week)')
+      .select('id, selected_team, is_lock, games(away_team,home_team,kickoff_time)')
       .eq('user_email', userForPicks)
       .eq('games.week', weekForPicks)
       .order('kickoff_time', { foreignTable: 'games', ascending: true })
@@ -119,7 +112,6 @@ export default function Admin() {
     setLoadingPicks(false)
   }
 
-  // Delete a pick
   const handleDeletePick = async (pickId) => {
     if (!confirm('Delete this pick?')) return
     const { error } = await supabase.from('picks').delete().eq('id', pickId)
@@ -127,7 +119,6 @@ export default function Admin() {
     else loadUserPicks()
   }
 
-  // Calculate weekly scores
   const calculateScores = async () => {
     setLoadingScores(true)
     const res = await fetch(`/api/weekly-scores?week=${selectedWeek}`)
@@ -139,14 +130,14 @@ export default function Admin() {
   return (
     <div style={{ padding: 20 }}>
       <h1>Admin</h1>
-      <p><Link href='/'><a>← Home</a></Link></p>
+      <p><Link href="/"><a>← Home</a></Link></p>
 
       {/* Game Management */}
       <section style={{ marginTop: 20 }}>
         <h2>Game Management (Week {selectedWeek})</h2>
         <div style={{ marginBottom: 12 }}>
           <label>
-            Week: 
+            Week: 
             <input
               type="number"
               min="1"
@@ -190,20 +181,4 @@ export default function Admin() {
         <div style={{ marginTop: 12 }}>
           <input placeholder="Away Team" value={newGameAway} onChange={e => setNewGameAway(e.target.value)} style={{ marginRight: 8 }} />
           <input placeholder="Home Team" value={newGameHome} onChange={e => setNewGameHome(e.target.value)} style={{ marginRight: 8 }} />
-          <input placeholder="Spread" type="number" value={newGameSpread} onChange={e => setNewGameSpread(e.target.value)} style={{ width: 80, marginRight: 8 }} />
-          <input placeholder="Kickoff (ISO)" value={newGameKickoff} onChange={e => setNewGameKickoff(e.target.value)} style={{ marginRight: 8 }} />
-          <button onClick={handleAddGame}>Add Game</button>
-        </div>
-      </section>
-
-      {/* User Management */}
-      <section style={{ marginTop: 40 }}>...</section>
-
-      {/* View User Picks */}
-      <section style={{ marginTop: 40 }}>...</section>
-
-      {/* Calculate Weekly Scores */}
-      <section style={{ marginTop: 40 }}>...</section>
-    </div>
-  )
-}
+          <input placeholder="Spread" type="number" value={newGameSpread} onChange={
