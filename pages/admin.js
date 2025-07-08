@@ -4,28 +4,28 @@ import { supabase } from '../lib/supabaseClient'
 
 export default function Admin() {
   const [selectedWeek, setSelectedWeek] = useState(1)
-  const [games, setGames]               = useState([])
-  const [profiles, setProfiles]         = useState([])
-  const [loadingGames, setLoadingGames]       = useState(false)
+  const [games, setGames] = useState([])
+  const [profiles, setProfiles] = useState([])
+  const [loadingGames, setLoadingGames] = useState(false)
   const [loadingProfiles, setLoadingProfiles] = useState(false)
 
   // New game form state
-  const [newGameAway, setNewGameAway]       = useState('')
-  const [newGameHome, setNewGameHome]       = useState('')
-  const [newGameSpread, setNewGameSpread]   = useState('')
+  const [newGameAway, setNewGameAway] = useState('')
+  const [newGameHome, setNewGameHome] = useState('')
+  const [newGameSpread, setNewGameSpread] = useState('')
   const [newGameKickoff, setNewGameKickoff] = useState('')
 
-  // View user picks
-  const [userForPicks, setUserForPicks]     = useState('')
-  const [weekForPicks, setWeekForPicks]     = useState(1)
-  const [userPicks, setUserPicks]           = useState([])
-  const [loadingPicks, setLoadingPicks]     = useState(false)
+  // View user picks state
+  const [userForPicks, setUserForPicks] = useState('')
+  const [weekForPicks, setWeekForPicks] = useState(1)
+  const [userPicks, setUserPicks] = useState([])
+  const [loadingPicks, setLoadingPicks] = useState(false)
 
-  // Weekly Scores
-  const [weeklyScores, setWeeklyScores]     = useState([])
-  const [loadingScores, setLoadingScores]   = useState(false)
+  // Weekly scores state
+  const [weeklyScores, setWeeklyScores] = useState([])
+  const [loadingScores, setLoadingScores] = useState(false)
 
-  // ── Load functions ────────────────────────────────────────────────────────────
+  // Load games for selected week
   const loadGames = async () => {
     setLoadingGames(true)
     const { data, error } = await supabase
@@ -38,6 +38,7 @@ export default function Admin() {
     setLoadingGames(false)
   }
 
+  // Load all profiles
   const loadProfiles = async () => {
     setLoadingProfiles(true)
     const { data, error } = await supabase
@@ -54,7 +55,7 @@ export default function Admin() {
     loadProfiles()
   }, [selectedWeek])
 
-  // ── Game Management Handlers ────────────────────────────────────────────────
+  // Add a new game
   const handleAddGame = async () => {
     const game = {
       week: selectedWeek,
@@ -74,6 +75,7 @@ export default function Admin() {
     }
   }
 
+  // Delete a game
   const handleDeleteGame = async (id) => {
     if (!confirm('Delete this game?')) return
     const { error } = await supabase.from('games').delete().eq('id', id)
@@ -81,6 +83,7 @@ export default function Admin() {
     else loadGames()
   }
 
+  // Clear all games for a week
   const handleClearWeek = async () => {
     if (!confirm(`Clear all games for Week ${selectedWeek}?`)) return
     const { error } = await supabase.from('games').delete().eq('week', selectedWeek)
@@ -88,7 +91,7 @@ export default function Admin() {
     else setGames([])
   }
 
-  // ── User Management Handler ────────────────────────────────────────────────
+  // Delete a user profile
   const handleDeleteUser = async (email) => {
     if (!confirm(`Delete user ${email}?`)) return
     const res = await fetch('/api/delete-profile', {
@@ -101,13 +104,16 @@ export default function Admin() {
     else loadProfiles()
   }
 
-  // ── Picks Viewing & Deletion ───────────────────────────────────────────────
+  // Load user's picks for a week
   const loadUserPicks = async () => {
-    if (!userForPicks) return alert('Please select a user')
+    if (!userForPicks) {
+      alert('Please select a user')
+      return
+    }
     setLoadingPicks(true)
     const { data, error } = await supabase
       .from('picks')
-      .select('id, selected_team, is_lock, game_id, games(away_team,home_team,kickoff_time,week)')
+      .select('id, selected_team, is_lock, games(away_team,home_team,kickoff_time)')
       .eq('user_email', userForPicks)
       .eq('games.week', weekForPicks)
       .order('kickoff_time', { foreignTable: 'games', ascending: true })
@@ -116,6 +122,7 @@ export default function Admin() {
     setLoadingPicks(false)
   }
 
+  // Delete a pick
   const handleDeletePick = async (pickId) => {
     if (!confirm('Delete this pick?')) return
     const { error } = await supabase.from('picks').delete().eq('id', pickId)
@@ -123,7 +130,7 @@ export default function Admin() {
     else loadUserPicks()
   }
 
-  // ── Weekly Scores Calculation ──────────────────────────────────────────────
+  // Calculate weekly scores
   const calculateScores = async () => {
     setLoadingScores(true)
     const res = await fetch(`/api/weekly-scores?week=${selectedWeek}`)
@@ -132,7 +139,6 @@ export default function Admin() {
     setLoadingScores(false)
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: 20 }}>
       <h1>Admin</h1>
@@ -156,7 +162,6 @@ export default function Admin() {
             Clear Week
           </button>
         </div>
-
         {loadingGames ? (
           <p>Loading games…</p>
         ) : (
@@ -187,34 +192,9 @@ export default function Admin() {
             </tbody>
           </table>
         )}
-
         <div style={{ marginTop: 12 }}>
           <input placeholder="Away Team" value={newGameAway} onChange={e => setNewGameAway(e.target.value)} style={{ marginRight: 8 }} />
           <input placeholder="Home Team" value={newGameHome} onChange={e => setNewGameHome(e.target.value)} style={{ marginRight: 8 }} />
           <input placeholder="Spread" type="number" value={newGameSpread} onChange={e => setNewGameSpread(e.target.value)} style={{ width: 80, marginRight: 8 }} />
-          <input placeholder="Kickoff (ISO)" value={newGameKickoff} onChange={e => setNewGameKickoff(e.target.value)} style={{ marginRight: 8 }} />
-          <button onClick={handleAddGame}>Add Game</button>
-        </div>
-      </section>
+          <input placeholder="Kickoff (ISO)" value={newGameKickoff} onChange={e => setNewGameKickoff(e.target.value)} style 
 
-      {/* User Management */}
-      <section style={{ marginTop: 40 }}>
-        <h2>User Management</h2>
-        {loadingProfiles ? (
-          <p>Loading profiles…</p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Username</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Name</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Email</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profiles.map(p => (
-                <tr key={p.email}>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.username}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.first_name} {p.last_name}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{
