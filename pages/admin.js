@@ -146,7 +146,7 @@ export default function Admin() {
         <h2>Game Management (Week {selectedWeek})</h2>
         <div style={{ marginBottom: 12 }}>
           <label>
-            Week:&nbsp;
+            Week: 
             <input
               type="number"
               min="1"
@@ -155,9 +155,7 @@ export default function Admin() {
               style={{ width: 60 }}
             />
           </label>
-          <button onClick={handleClearWeek} style={{ marginLeft: 12 }}>
-            Clear Week
-          </button>
+          <button onClick={handleClearWeek} style={{ marginLeft: 12 }}>Clear Week</button>
         </div>
         {loadingGames ? (
           <p>Loading games…</p>
@@ -182,7 +180,8 @@ export default function Admin() {
                   <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
                     <button onClick={() => handleDeleteGame(g.id)} style={{ background: 'red', color: 'white', padding: '6px 12px', border: 'none' }}>
                       Delete
-                    }</td>
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -191,4 +190,20 @@ export default function Admin() {
         <div style={{ marginTop: 12 }}>
           <input placeholder="Away Team" value={newGameAway} onChange={e => setNewGameAway(e.target.value)} style={{ marginRight: 8 }} />
           <input placeholder="Home Team" value={newGameHome} onChange={e => setNewGameHome(e.target.value)} style={{ marginRight: 8 }} />
-          <input placeholder="Spread" type="number" value={newGameSpread} onChange={
+          <input placeholder="Spread" type="number" value={newGameSpread} onChange={e => setNewGameSpread(e.target.value)} style={{ width: 80, marginRight: 8 }} />
+          <input placeholder="Kickoff (ISO)" value={newGameKickoff} onChange={e => setNewGameKickoff(e.target.value)} style={{ marginRight: 8 }} />
+          <button onClick={handleAddGame}>Add Game</button>
+        </div>
+      </section>
+
+      {/* User Management */}
+      <section style={{ marginTop: 40 }}>...</section>
+
+      {/* View User Picks */}
+      <section style={{ marginTop: 40 }}>...</section>
+
+      {/* Calculate Weekly Scores */}
+      <section style={{ marginTop: 40 }}>...</section>
+    </div>
+  )
+}
