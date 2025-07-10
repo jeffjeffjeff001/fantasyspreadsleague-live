@@ -1,7 +1,7 @@
 // pages/api/weekly-scores.js
 import { createClient } from '@supabase/supabase-js'
 
-// supabaseAdmin with service role key bypasses RLS
+// Admin client using your service role key (bypasses RLS)
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -14,70 +14,81 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid week parameter' })
   }
 
-  // 1) Load results from game_results table
-  let { data: results = [], error } = await supabaseAdmin
+  // 1) Load final game results for that week
+  let { data: results = [], error: rErr } = await supabaseAdmin
     .from('game_results')
     .select('away_team,home_team,away_score,home_score,game_week')
     .eq('game_week', week)
 
-  if (error) {
-    // fallback to a table named `results`
-    const { data: alt = [], error: err2 } = await supabaseAdmin
+  if (rErr) {
+    // fallback to table named `results`
+    const { data: alt = [], error: rErr2 } = await supabaseAdmin
       .from('results')
       .select('away_team,home_team,away_score,home_score,week')
       .eq('week', week)
-    if (err2) {
-      return res.status(500).json({ error: err2.message })
-    }
+    if (rErr2) return res.status(500).json({ error: rErr2.message })
+    // normalize to same shape
     results = alt.map(r => ({
       away_team:  r.away_team,
       home_team:  r.home_team,
       away_score: r.away_score,
-      home_score: r.home_score
+      home_score: r.home_score,
+      game_week:  week
     }))
   }
 
-  // 2) Load all picks for that week
-  const { data: picks = [], error: picksError } = await supabaseAdmin
+  // 2) Load **all** picks with their related game data
+  const { data: allPicks = [], error: pErr } = await supabaseAdmin
     .from('picks')
-    .select('user_email,selected_team,is_lock,games(away_team,home_team,spread,week)')
-    .eq('games.week', week)
+    .select(`
+      user_email,
+      selected_team,
+      is_lock,
+      games (
+        away_team,
+        home_team,
+        spread,
+        week
+      )
+    `)
 
-  if (picksError) {
-    return res.status(500).json({ error: picksError.message })
-  }
+  if (pErr) return res.status(500).json({ error: pErr.message })
 
-  // 3) Tally by user
+  // 3) Filter picks to this week
+  const picks = allPicks.filter(p => p.games?.week === week)
+
+  // Seed per-user stats
   const statsByUser = {}
   picks.forEach(p => {
     if (!statsByUser[p.user_email]) {
       statsByUser[p.user_email] = {
-        correct: 0,
-        lockCorrect: 0,
-        lockIncorrect: 0,
+        correct:      0,
+        lockCorrect:  0,
+        lockIncorrect:0,
         perfectBonus: 0
       }
     }
   })
 
+  // Tally each pick
   picks.forEach(p => {
     const g = p.games
-    // find matching result
+    // find the matching game result
     const r = results.find(r =>
       (r.home_team === g.home_team && r.away_team === g.away_team) ||
       (r.home_team === g.away_team && r.away_team === g.home_team)
     )
     if (!r) return
 
-    // determine coverage
-    const homeCovers = (r.home_score + g.spread) > r.away_score
+    // determine if home covered: home_score + spread > away_score
+    const homeCovers = (r.home_score + parseFloat(g.spread)) > r.away_score
     const coveringTeam = homeCovers ? r.home_team : r.away_team
 
     const u = statsByUser[p.user_email]
     if (p.selected_team === coveringTeam) {
-      // +1 for any correct
+      // +1 for correct
       u.correct += 1
-      // extra +1 if lock -> total +2
+      // extra +1 if this was a lock (net +2)
       if (p.is_lock) u.lockCorrect += 1
     } else {
       // penalty for wrong lock
@@ -85,32 +96,27 @@ export default async function handler(req, res) {
     }
   })
 
-  // perfect-week bonus
+  // perfect-week bonus: if they got 5 correct picks
   Object.values(statsByUser).forEach(u => {
     if (u.correct === 5) u.perfectBonus = 3
   })
 
-  // 4) Build response
+  // 4) Build the response array
   const response = Object.entries(statsByUser).map(([email, u]) => {
-    const weeklyPoints =
-      // each correct: +1
-      u.correct
-      // each lock-correct gives +1 more (so lock correct total = 2)
-      + u.lockCorrect * 1
-      // each lock-incorrect is -2
-      + u.lockIncorrect * -2
-      // perfect-week
-      + u.perfectBonus
-
+    const points =
+      u.correct +          // every correct pick
+      u.lockCorrect * 1 +  // extra +1 for each lockCorrect (so total +2)
+      u.lockIncorrect * -2 + // -2 per wrong lock
+      u.perfectBonus       // possible +3
     return {
       email,
-      correct:      u.correct,
-      lockCorrect:  u.lockCorrect,
-      lockIncorrect:u.lockIncorrect,
-      perfectBonus: u.perfectBonus,
-      weeklyPoints
+      correct:       u.correct,
+      lockCorrect:   u.lockCorrect,
+      lockIncorrect: u.lockIncorrect,
+      perfectBonus:  u.perfectBonus,
+      weeklyPoints:  points
     }
   })
 
-  return res.status(200).json(response)
+  res.status(200).json(response)
 }
