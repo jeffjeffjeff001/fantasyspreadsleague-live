@@ -1,7 +1,7 @@
 // pages/api/weekly-scores.js
 import { createClient } from '@supabase/supabase-js'
 
-// Admin client (uses your service role key to bypass RLS)
+// Admin client (service role key bypasses RLS)
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -14,31 +14,54 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid week parameter' })
   }
 
-  // 1) Load game results (from game_results, fallback to results)
-  let { data: results = [], error: rErr } = await supabaseAdmin
+  // 1) Load game results for that week from whichever table/column exists
+  let results = []
+
+  // Try table `game_results` + column `game_week`
+  let { data: r1 = [], error: e1 } = await supabaseAdmin
     .from('game_results')
     .select('away_team,home_team,away_score,home_score,game_week')
     .eq('game_week', week)
 
-  if (rErr) {
-    const { data: alt = [], error: rErr2 } = await supabaseAdmin
+  if (!e1 && r1.length) {
+    results = r1
+  } else {
+    // Try table `results` + column `game_week`
+    let { data: r2 = [], error: e2 } = await supabaseAdmin
       .from('results')
-      .select('away_team,home_team,away_score,home_score,week')
-      .eq('week', week)
-    if (rErr2) {
-      return res.status(500).json({ error: rErr2.message })
+      .select('away_team,home_team,away_score,home_score,game_week')
+      .eq('game_week', week)
+
+    if (!e2 && r2.length) {
+      results = r2
+    } else {
+      // Try table `results` + column `week`
+      let { data: r3 = [], error: e3 } = await supabaseAdmin
+        .from('results')
+        .select('away_team,home_team,away_score,home_score,week')
+        .eq('week', week)
+
+      if (e3) {
+        return res.status(500).json({ error: e3.message })
+      }
+      // normalize shape
+      results = r3.map(r => ({
+        away_team:  r.away_team,
+        home_team:  r.home_team,
+        away_score: r.away_score,
+        home_score: r.home_score,
+        game_week:  week
+      }))
     }
-    // normalize shape
-    results = alt.map(r => ({
-      away_team: r.away_team,
-      home_team: r.home_team,
-      away_score: r.away_score,
-      home_score: r.home_score,
-      game_week: week
-    }))
   }
 
-  // 2) Load all picks for that week (joined on games.week)
+  if (results.length === 0) {
+    return res
+      .status(404)
+      .json({ error: `No game results found for week ${week}` })
+  }
+
+  // 2) Pull all picks for that week
   const { data: picks = [], error: pErr } = await supabaseAdmin
     .from('picks')
     .select(`
@@ -63,33 +86,34 @@ export default async function handler(req, res) {
   picks.forEach(p => {
     if (!statsByUser[p.user_email]) {
       statsByUser[p.user_email] = {
-        correct: 0,
-        lockCorrect: 0,
+        correct:       0,
+        lockCorrect:   0,
         lockIncorrect: 0,
-        perfectBonus: 0
+        perfectBonus:  0
       }
     }
   })
 
-  for (const p of picks) {
+  // Evaluate each pick
+  for (let p of picks) {
     const g = p.games
-    // find matching result
+    // find the corresponding result row
     const r = results.find(r =>
       (r.home_team === g.home_team && r.away_team === g.away_team) ||
       (r.home_team === g.away_team && r.away_team === g.home_team)
     )
     if (!r) continue
 
-    // determine if home covers: home_score + spread > away_score
-    const spread = parseFloat(g.spread)  // ensure numeric
+    // compute cover: home_score + spread > away_score
+    const spread = parseFloat(g.spread)
     const homeCovers = (r.home_score + spread) > r.away_score
     const coveringTeam = homeCovers ? r.home_team : r.away_team
 
     const u = statsByUser[p.user_email]
     if (p.selected_team === coveringTeam) {
-      // +1 for correct pick
+      // +1 for correct
       u.correct += 1
-      // +2 bonus for correct lock
+      // +2 bonus if lock
       if (p.is_lock) u.lockCorrect += 1
     } else {
       // -2 penalty for wrong lock
@@ -97,19 +121,19 @@ export default async function handler(req, res) {
     }
   }
 
-  // perfect-week bonus: +3 if all 5 picks correct
+  // Perfect-week bonus +3 if they got all 5 correct
   Object.values(statsByUser).forEach(u => {
     if (u.correct === 5) u.perfectBonus = 3
   })
 
-  // 4) Build and return the response
+  // 4) Format response
   const response = Object.entries(statsByUser).map(([email, u]) => {
     const weeklyPoints =
-      // each correct pick = +1
+      // each correct pick
       u.correct
-      // each correct lock = additional +2
+      // each correct lock gives +2 more
       + u.lockCorrect * 2
-      // each wrong lock = -2
+      // each incorrect lock is -2
       + u.lockIncorrect * -2
       // perfect-week bonus
       + u.perfectBonus
