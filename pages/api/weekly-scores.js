@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js'
 // ————————————————————————————————————————————————————————————————
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,  // ← make sure this env var is set in Vercel
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
   { auth: null }
 )
 
@@ -17,6 +17,7 @@ export default async function handler(req, res) {
   if (isNaN(week)) {
     return res.status(400).json({ error: 'Invalid week parameter' })
   }
+  console.log(`weekly-scores handler: week=${week}`)
 
   // 2) load that week’s final scores from your `results` table
   const { data: results = [], error: resultsError } = await supabaseAdmin
@@ -25,8 +26,10 @@ export default async function handler(req, res) {
     .eq('week', week)
 
   if (resultsError) {
+    console.error('Error fetching results:', resultsError)
     return res.status(500).json({ error: resultsError.message })
   }
+  console.log(`-> fetched results (${results.length} rows):`, results)
   if (results.length === 0) {
     return res.status(404).json({ error: `No results for week ${week}` })
   }
@@ -49,8 +52,10 @@ export default async function handler(req, res) {
     .eq('games.week', week)
 
   if (picksError) {
+    console.error('Error fetching picks:', picksError)
     return res.status(500).json({ error: picksError.message })
   }
+  console.log(`-> fetched picks   (${picks.length} rows):`, picks)
 
   // 4) initialize stats object per user
   const statsByUser = {}
@@ -74,12 +79,12 @@ export default async function handler(req, res) {
     )
     if (!result) continue
 
-    const cover = (result.home_score + parseFloat(g.spread)) > result.away_score
-      ? result.home_team
-      : result.away_team
+    const spread = parseFloat(g.spread)
+    const homeCovers = (result.home_score + spread) > result.away_score
+    const coveringTeam = homeCovers ? result.home_team : result.away_team
 
     const u = statsByUser[pick.user_email]
-    if (pick.selected_team === cover) {
+    if (pick.selected_team === coveringTeam) {
       u.correct += 1
       if (pick.is_lock) u.lockCorrect += 1
     } else if (pick.is_lock) {
@@ -110,5 +115,6 @@ export default async function handler(req, res) {
     }
   })
 
+  console.log('-> computed stats:', response)
   return res.status(200).json(response)
 }
