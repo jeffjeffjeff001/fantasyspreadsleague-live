@@ -17,7 +17,6 @@ export default async function handler(req, res) {
   if (isNaN(week)) {
     return res.status(400).json({ error: 'Invalid week parameter' })
   }
-  console.log(`weekly-scores handler: week=${week}`)
 
   // 2) load that week’s final scores from your `results` table
   const { data: results = [], error: resultsError } = await supabaseAdmin
@@ -26,10 +25,8 @@ export default async function handler(req, res) {
     .eq('week', week)
 
   if (resultsError) {
-    console.error('Error fetching results:', resultsError)
     return res.status(500).json({ error: resultsError.message })
   }
-  console.log(`-> fetched results (${results.length} rows):`, results)
   if (results.length === 0) {
     return res.status(404).json({ error: `No results for week ${week}` })
   }
@@ -52,10 +49,8 @@ export default async function handler(req, res) {
     .eq('games.week', week)
 
   if (picksError) {
-    console.error('Error fetching picks:', picksError)
     return res.status(500).json({ error: picksError.message })
   }
-  console.log(`-> fetched picks   (${picks.length} rows):`, picks)
 
   // 4) initialize stats object per user
   const statsByUser = {}
@@ -73,18 +68,29 @@ export default async function handler(req, res) {
   // 5) for each pick, find its result and update stats
   for (const pick of picks) {
     const g = pick.games
-    // match by team names
+
+    // trim away extra spaces before matching
+    const pickAway  = g.away_team.trim()
+    const pickHome  = g.home_team.trim()
+
     const result = results.find(r =>
-      r.home_team === g.home_team && r.away_team === g.away_team
+      r.home_team.trim() === pickHome &&
+      r.away_team.trim() === pickAway
     )
     if (!result) continue
 
-    const spread = parseFloat(g.spread)
+    // determine covering team
+    const spread    = parseFloat(g.spread)
     const homeCovers = (result.home_score + spread) > result.away_score
-    const coveringTeam = homeCovers ? result.home_team : result.away_team
+    const coveringTeam = homeCovers
+      ? result.home_team.trim()
+      : result.away_team.trim()
 
-    const u = statsByUser[pick.user_email]
-    if (pick.selected_team === coveringTeam) {
+    // normalize the user’s pick too
+    const selected = pick.selected_team.trim()
+    const u        = statsByUser[pick.user_email]
+
+    if (selected === coveringTeam) {
       u.correct += 1
       if (pick.is_lock) u.lockCorrect += 1
     } else if (pick.is_lock) {
@@ -115,6 +121,5 @@ export default async function handler(req, res) {
     }
   })
 
-  console.log('-> computed stats:', response)
   return res.status(200).json(response)
 }
