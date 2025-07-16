@@ -1,20 +1,24 @@
 // pages/api/weekly-scores.js
+
 import { createClient } from '@supabase/supabase-js'
 
-// Initialize an admin Supabase client using your service role key
+// ————————————————————————————————————————————————————————————————
+// Initialize an ADMIN Supabase client using your service‐role key
+// ————————————————————————————————————————————————————————————————
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,  // ← make sure this env var is set in Vercel
   { auth: null }
 )
 
 export default async function handler(req, res) {
+  // 1) parse & validate week
   const week = parseInt(req.query.week, 10)
   if (isNaN(week)) {
     return res.status(400).json({ error: 'Invalid week parameter' })
   }
 
-  // 1) Load game results for this week from the `results` table
+  // 2) load that week’s final scores from your `results` table
   const { data: results = [], error: resultsError } = await supabaseAdmin
     .from('results')
     .select('away_team,home_team,away_score,home_score,week')
@@ -24,12 +28,10 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: resultsError.message })
   }
   if (results.length === 0) {
-    return res
-      .status(404)
-      .json({ error: `No results found for week ${week}` })
+    return res.status(404).json({ error: `No results for week ${week}` })
   }
 
-  // 2) Load all picks for that same week
+  // 3) load all picks joined with their games for the same week
   const { data: picks = [], error: picksError } = await supabaseAdmin
     .from('picks')
     .select(`
@@ -37,6 +39,7 @@ export default async function handler(req, res) {
       selected_team,
       is_lock,
       games (
+        id,
         away_team,
         home_team,
         spread,
@@ -49,12 +52,11 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: picksError.message })
   }
 
-  // 3) Tally per-user stats
+  // 4) initialize stats object per user
   const statsByUser = {}
   picks.forEach(pick => {
-    const email = pick.user_email
-    if (!statsByUser[email]) {
-      statsByUser[email] = {
+    if (!statsByUser[pick.user_email]) {
+      statsByUser[pick.user_email] = {
         correct:       0,
         lockCorrect:   0,
         lockIncorrect: 0,
@@ -63,43 +65,40 @@ export default async function handler(req, res) {
     }
   })
 
+  // 5) for each pick, find its result and update stats
   for (const pick of picks) {
     const g = pick.games
-    // Find corresponding result row
+    // match by team names
     const result = results.find(r =>
-      (r.home_team === g.home_team && r.away_team === g.away_team) ||
-      (r.home_team === g.away_team && r.away_team === g.home_team)
+      r.home_team === g.home_team && r.away_team === g.away_team
     )
     if (!result) continue
 
-    const spread = parseFloat(g.spread)
-    const homeCovers = (result.home_score + spread) > result.away_score
-    const coveringTeam = homeCovers ? result.home_team : result.away_team
+    const cover = (result.home_score + parseFloat(g.spread)) > result.away_score
+      ? result.home_team
+      : result.away_team
 
-    const userStats = statsByUser[pick.user_email]
-    if (pick.selected_team === coveringTeam) {
-      // +1 for correct pick
-      userStats.correct += 1
-      // +2 bonus for a correct lock (net +3)
-      if (pick.is_lock) userStats.lockCorrect += 1
-    } else {
-      // -2 penalty for a wrong lock
-      if (pick.is_lock) userStats.lockIncorrect += 1
+    const u = statsByUser[pick.user_email]
+    if (pick.selected_team === cover) {
+      u.correct += 1
+      if (pick.is_lock) u.lockCorrect += 1
+    } else if (pick.is_lock) {
+      u.lockIncorrect += 1
     }
   }
 
-  // 4) Apply perfect-week bonus (+3 if 5 correct)
+  // 6) perfect‐week bonus
   Object.values(statsByUser).forEach(u => {
     if (u.correct === 5) u.perfectBonus = 3
   })
 
-  // 5) Build response array
+  // 7) build final JSON array
   const response = Object.entries(statsByUser).map(([email, u]) => {
     const weeklyPoints =
-      u.correct +               // +1 per correct pick
-      u.lockCorrect * 2 +       // +2 bonus per correct lock
-      u.lockIncorrect * -2 +    // -2 per wrong lock
-      u.perfectBonus            // +3 for perfect week
+      u.correct +             // +1 per correct pick
+      u.lockCorrect * 2 +     // +2 extra for each correct lock
+      u.lockIncorrect * -2 +  // -2 for each wrong lock
+      u.perfectBonus          // +3 if 5/5 correct
 
     return {
       email,
