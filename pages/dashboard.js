@@ -1,184 +1,248 @@
 // pages/dashboard.js
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '../lib/supabaseClient'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_KEY
-)
+export default function Dashboard() {
+  // --- weekly‐score form state ---
+  const [wsEmail, setWsEmail]   = useState('')
+  const [wsWeek, setWsWeek]     = useState(1)
+  const [wsResult, setWsResult] = useState(null)
+  const [wsLoading, setWsLoading] = useState(false)
+  const [wsError, setWsError]   = useState('')
 
-export default function LeagueDashboard() {
-  const [week, setWeek]         = useState(1)
-  const [profiles, setProfiles] = useState([])
-  const [games, setGames]       = useState([])
-  const [picks, setPicks]       = useState([])
-  const [loading, setLoading]   = useState(false)
+  // --- leaderboard state ---
+  const [leaderboard, setLeaderboard] = useState([])
+  const [lbLoading, setLbLoading]     = useState(true)
 
+  // Fetch and compute the leaderboard on mount
   useEffect(() => {
-    setLoading(true)
-    Promise.all([
-      supabase.from('profiles').select('email, username'),
-      supabase.from('games').select('*').eq('week', week),
-      supabase.from('picks').select('user_email, selected_team, is_lock, game_id')
-    ]).then(([{ data: pr }, { data: gm }, { data: pk }]) => {
-      setProfiles(pr || [])
-      setGames(gm || [])
-      // only picks for this week
-      const gameIds = new Set((gm || []).map((g) => g.id))
-      setPicks((pk || []).filter((p) => gameIds.has(p.game_id)))
-      setLoading(false)
-    })
-  }, [week])
-
-  // map picks by user
-  const picksByUser = {}
-  profiles.forEach((p) => { picksByUser[p.email] = [] })
-  picks.forEach((pick) => {
-    picksByUser[pick.user_email]?.push(pick)
-  })
-
-  const isCorrect   = (pick) => {
-    const game = games.find((g) => g.id === pick.game_id)
-    return game && pick.selected_team === game.result_winner
-  }
-  const isThursday = (iso) => new Date(iso).getUTCDay() === 4
-  const isMonday   = (iso) => new Date(iso).getUTCDay() === 1
-
-  // weekly scores for everyone (zero if no picks)
-  const weeklyScores = profiles.map((p) => {
-    const userPicks = picksByUser[p.email] || []
-    let correct = 0, lockCorrect = 0
-    userPicks.forEach((pick) => {
-      if (isCorrect(pick)) {
-        pick.is_lock ? lockCorrect++ : correct++
+    async function loadLeaderboard() {
+      setLbLoading(true)
+      // 1) grab all profiles
+      const { data: profiles, error: profErr } = await supabase
+        .from('profiles')
+        .select('email,username')
+      if (profErr) {
+        console.error(profErr)
+        setLbLoading(false)
+        return
       }
-    })
-    const perfectBonus = (correct + lockCorrect === 5) ? 3 : 0
-    return {
-      email: p.email,
-      username: p.username,
-      weeklyPoints: correct + lockCorrect * 2 + perfectBonus,
-      correct,
-      lockCorrect
-    }
-  })
 
-  // leaderboard sorted
-  const leaderboard = [...weeklyScores].sort((a, b) =>
-    b.weeklyPoints !== a.weeklyPoints
-      ? b.weeklyPoints - a.weeklyPoints
-      : b.correct - a.correct
-  )
+      // 2) grab every game result
+      const { data: results, error: resErr } = await supabase
+        .from('results')
+        .select('away_team,home_team,away_score,home_score,week')
+      if (resErr) {
+        console.error(resErr)
+        setLbLoading(false)
+        return
+      }
+
+      // 3) grab every pick with its game
+      const { data: picks, error: pickErr } = await supabase
+        .from('picks')
+        .select(`
+          user_email,
+          selected_team,
+          is_lock,
+          games (
+            away_team,
+            home_team,
+            spread,
+            week
+          )
+        `)
+      if (pickErr) {
+        console.error(pickErr)
+        setLbLoading(false)
+        return
+      }
+
+      // 4) init stats per user
+      const stats = {}
+      profiles.forEach(p => {
+        stats[p.email] = {
+          username:      p.username,
+          totalCorrect:  0,
+          totalPoints:   0
+        }
+      })
+
+      // 5) run each pick through the scoring logic
+      picks.forEach(pick => {
+        const g = pick.games
+        // find the matching result row
+        const result = results.find(r =>
+          r.week === g.week &&
+          r.home_team.trim() === g.home_team.trim() &&
+          r.away_team.trim() === g.away_team.trim()
+        )
+        if (!result) return  // no result → skip
+
+        // who covered?
+        const spread    = parseFloat(g.spread)
+        const homeCover = (result.home_score + spread) > result.away_score
+        const winner    = homeCover
+          ? result.home_team.trim()
+          : result.away_team.trim()
+
+        const picked    = pick.selected_team.trim()
+        const userStats = stats[pick.user_email]
+        if (!userStats) return
+
+        // correct?
+        if (picked === winner) {
+          userStats.totalCorrect += 1
+          userStats.totalPoints  += 1
+          // +2 bonus for correct lock
+          if (pick.is_lock) {
+            userStats.totalPoints += 2
+          }
+        } else {
+          // wrong lock → −2
+          if (pick.is_lock) {
+            userStats.totalPoints -= 2
+          }
+        }
+      })
+
+      // 6) perfect‐week bonus: +3 for any week with 5/5
+      //    we’d need per‐week counts; for MVP you can skip or add later.
+
+      // 7) turn into sorted array
+      const list = Object.values(stats)
+      list.sort((a, b) => {
+        if (b.totalPoints !== a.totalPoints) {
+          return b.totalPoints - a.totalPoints
+        }
+        return b.totalCorrect - a.totalCorrect
+      })
+
+      setLeaderboard(list)
+      setLbLoading(false)
+    }
+
+    loadLeaderboard()
+  }, [])
+
+  // --- handle the weekly score lookup ---
+  async function fetchWeeklyScore() {
+    setWsError('')
+    setWsResult(null)
+    setWsLoading(true)
+
+    try {
+      const res = await fetch(
+        `/api/weekly-scores?week=${encodeURIComponent(wsWeek)}`
+      )
+      const payload = await res.json()
+      if (!res.ok) {
+        throw new Error(payload.error || 'Unknown error')
+      }
+      // find this user’s entry
+      const me = payload.find(r => r.email === wsEmail.trim())
+      if (!me) {
+        setWsError('No picks found for that email/week combination.')
+      } else {
+        setWsResult(me)
+      }
+    } catch (e) {
+      setWsError(e.message)
+    } finally {
+      setWsLoading(false)
+    }
+  }
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ padding: 20, fontFamily: 'sans-serif' }}>
       <h1>League Dashboard</h1>
-      <p><Link href="/"><a>← Home</a></Link></p>
+      <nav>
+        <Link href="/"><a>← Home</a></Link>
+      </nav>
 
-      <div style={{ margin: '20px 0' }}>
-        <label>
-          Week:&nbsp;
-          <input
-            type="number" min="1"
-            value={week}
-            onChange={e => setWeek(parseInt(e.target.value,10)||1)}
-            style={{ width: 60 }}
-          />
-        </label>
-      </div>
-
-      {loading && <p>Loading…</p>}
-
-      {/* Weekly Score */}
-      <section style={{ marginBottom: 40 }}>
-        <h2>Weekly Score (Week {week})</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>User</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Score</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Total Correct Picks</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Lock Correct</th>
-            </tr>
-          </thead>
-          <tbody>
-            {weeklyScores.map((u) => (
-              <tr key={u.email}>
-                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.username}</td>
-                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.weeklyPoints}</td>
-                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.correct}</td>
-                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.lockCorrect}</td>
+      {/* --- Weekly Score --- */}
+      <section style={{ marginTop: 40 }}>
+        <h2>Weekly Score Lookup</h2>
+        <div style={{ marginBottom: 8 }}>
+          <label>
+            Email:{' '}
+            <input
+              type="email"
+              value={wsEmail}
+              onChange={e => setWsEmail(e.target.value)}
+            />
+          </label>
+          {' '}
+          <label>
+            Week:{' '}
+            <input
+              type="number"
+              min={1}
+              value={wsWeek}
+              onChange={e => setWsWeek(e.target.value)}
+            />
+          </label>
+          {' '}
+          <button onClick={fetchWeeklyScore} disabled={wsLoading}>
+            {wsLoading ? 'Loading…' : 'Get Score'}
+          </button>
+        </div>
+        {wsError && <p style={{ color: 'red' }}>{wsError}</p>}
+        {wsResult && (
+          <table border={1} cellPadding={8} style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Correct</th>
+                <th>Lock ✔</th>
+                <th>Lock ✘</th>
+                <th>Bonus</th>
+                <th>Points</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{wsResult.email}</td>
+                <td style={{ textAlign: 'center' }}>{wsResult.correct}</td>
+                <td style={{ textAlign: 'center' }}>{wsResult.lockCorrect}</td>
+                <td style={{ textAlign: 'center' }}>{wsResult.lockIncorrect}</td>
+                <td style={{ textAlign: 'center' }}>{wsResult.perfectBonus}</td>
+                <td style={{ textAlign: 'center' }}>{wsResult.weeklyPoints}</td>
+              </tr>
+            </tbody>
+          </table>
+        )}
       </section>
 
-      {/* League Leaderboard */}
-      <section style={{ marginBottom: 40 }}>
+      {/* --- League Leaderboard --- */}
+      <section style={{ marginTop: 60 }}>
         <h2>League Leaderboard</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Rank</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>User</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Points</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Total Correct Picks</th>
-            </tr>
-          </thead>
-          <tbody>
-            {leaderboard.map((u,i) => (
-              <tr key={u.email}>
-                <td style={{ border: '1px solid #ccc', padding: 8 }}>{i+1}</td>
-                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.username}</td>
-                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.weeklyPoints}</td>
-                <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.correct}</td>
+        {lbLoading ? (
+          <p>Loading leaderboard…</p>
+        ) : (
+          <table border={1} cellPadding={8} style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Username</th>
+                <th>Total Correct</th>
+                <th>Total Points</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      {/* League Picks */}
-      <section>
-        <h2>League Picks (Week {week})</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>User</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Thursday</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Best-3</th>
-              <th style={{ border: '1px solid #ccc', padding: 8 }}>Monday</th>
-            </tr>
-          </thead>
-          <tbody>
-            {profiles.map((p) => {
-              const userPicks = picksByUser[p.email] || []
-              const th = userPicks.find(pk => isThursday(games.find(g=>g.id===pk.game_id).kickoff_time))
-              const mo = userPicks.find(pk => isMonday(games.find(g=>g.id===pk.game_id).kickoff_time))
-              const best = userPicks
-                .filter(pk => {
-                  const dow = new Date(
-                    games.find(g=>g.id===pk.game_id).kickoff_time
-                  ).getUTCDay()
-                  return dow!==1 && dow!==4
-                })
-                .slice(0,3)
-
-              return (
-                <tr key={p.email}>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{p.username}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{th?.selected_team||'–'}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>
-                    {best.length ? best.map(b=>b.selected_team).join(', ') : '–'}
-                  </td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{mo?.selected_team||'–'}</td>
+            </thead>
+            <tbody>
+              {leaderboard.map((u, i) => (
+                <tr key={u.username || i}>
+                  <td style={{ textAlign: 'center' }}>{i + 1}</td>
+                  <td>{u.username}</td>
+                  <td style={{ textAlign: 'center' }}>{u.totalCorrect}</td>
+                  <td style={{ textAlign: 'center' }}>{u.totalPoints}</td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
     </div>
   )
