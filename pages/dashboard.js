@@ -6,42 +6,48 @@ import { supabase } from '../lib/supabaseClient'
 
 export default function Dashboard() {
   // — Weekly Score state —
-  const [wsEmail, setWsEmail] = useState('')
-  const [wsWeek, setWsWeek] = useState(1)
-  const [wsResult, setWsResult] = useState(null)
-  const [wsError, setWsError] = useState('')
-  const [wsLoading, setWsLoading] = useState(false)
+  const [wsEmail,    setWsEmail]    = useState('')
+  const [wsWeek,     setWsWeek]     = useState(1)
+  const [wsResult,   setWsResult]   = useState(null)
+  const [wsError,    setWsError]    = useState('')
+  const [wsLoading,  setWsLoading]  = useState(false)
 
   // — Leaderboard state —
   const [leaderboard, setLeaderboard] = useState([])
-  const [lbLoading, setLbLoading] = useState(true)
+  const [lbLoading,   setLbLoading]   = useState(true)
 
   // — League Picks state —
-  const [lpWeek, setLpWeek] = useState(1)
-  const [lpPicks, setLpPicks] = useState([])
-  const [lpLoading, setLpLoading] = useState(false)
+  const [lpWeek,     setLpWeek]     = useState(1)
+  const [lpPicks,    setLpPicks]    = useState([])
+  const [lpLoading,  setLpLoading]  = useState(false)
 
   // Fetch & compute the leaderboard on mount
   useEffect(() => {
     async function loadLeaderboard() {
       setLbLoading(true)
-      // 1) fetch all profiles
-      let { data: profiles, error } = await supabase
+
+      // 1) fetch profiles
+      const { data: profiles, error: profErr } = await supabase
         .from('profiles')
         .select('email,username')
-      if (error) {
-        console.error(error)
+      if (profErr) {
+        console.error(profErr)
         setLbLoading(false)
         return
       }
 
       // 2) fetch all results
-      let { data: results } = await supabase
+      const { data: results, error: resErr } = await supabase
         .from('results')
         .select('away_team,home_team,away_score,home_score,week')
+      if (resErr) {
+        console.error(resErr)
+        setLbLoading(false)
+        return
+      }
 
-      // 3) fetch all picks with games
-      let { data: picks } = await supabase
+      // 3) fetch all picks
+      const { data: picks, error: pickErr } = await supabase
         .from('picks')
         .select(`
           user_email,
@@ -54,11 +60,20 @@ export default function Dashboard() {
             week
           )
         `)
+      if (pickErr) {
+        console.error(pickErr)
+        setLbLoading(false)
+        return
+      }
 
       // 4) init stats
       const stats = {}
       profiles.forEach(p => {
-        stats[p.email] = { username: p.username, totalCorrect: 0, totalPoints: 0 }
+        stats[p.email] = {
+          username:     p.username,
+          totalCorrect: 0,
+          totalPoints:  0
+        }
       })
 
       // 5) score every pick
@@ -90,7 +105,7 @@ export default function Dashboard() {
         }
       })
 
-      // 6) sort by totalPoints, then totalCorrect
+      // 6) sort
       const list = Object.values(stats)
       list.sort((a, b) => {
         if (b.totalPoints !== a.totalPoints) {
@@ -105,34 +120,40 @@ export default function Dashboard() {
     loadLeaderboard()
   }, [])
 
-  // Handle weekly score lookup
+  // — Weekly Score Lookup —
   async function fetchWeeklyScore() {
     setWsError('')
     setWsResult(null)
     setWsLoading(true)
     try {
-      const resp = await fetch(
-        `/api/weekly-scores?week=${encodeURIComponent(wsWeek)}`
-      )
+      const resp = await fetch(`/api/weekly-scores?week=${wsWeek}`)
       const json = await resp.json()
-      if (!resp.ok) throw new Error(json.error || 'Unknown error')
+      if (!resp.ok) throw new Error(json.error || 'Error')
       const me = json.find(r => r.email === wsEmail.trim())
       if (!me) {
-        setWsError('No picks found for that email/week.')
+        setWsError('No picks found for that email & week.')
       } else {
         setWsResult(me)
       }
-    } catch (e) {
-      setWsError(e.message)
+    } catch (err) {
+      setWsError(err.message)
     } finally {
       setWsLoading(false)
     }
   }
 
-  // Load picks for a given week
+  // — Load & group league picks —
   async function loadLeaguePicks() {
     setLpLoading(true)
-    let { data, error } = await supabase
+    // 1) fetch profiles for username lookup
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('email,username')
+    const userMap = {}
+    profiles.forEach(p => { userMap[p.email] = p.username })
+
+    // 2) fetch picks+games for lpWeek
+    const { data: picks, error } = await supabase
       .from('picks')
       .select(`
         user_email,
@@ -146,56 +167,77 @@ export default function Dashboard() {
         )
       `)
       .eq('games.week', lpWeek)
+
     if (error) {
       console.error(error)
       setLpPicks([])
-    } else {
-      setLpPicks(data)
+      setLpLoading(false)
+      return
     }
+
+    // 3) group by user
+    const grouped = {}
+    picks.forEach(pick => {
+      const email = pick.user_email
+      if (!grouped[email]) {
+        grouped[email] = {
+          username:  userMap[email] || email,
+          thursday:  '',
+          best:      [],
+          monday:    ''
+        }
+      }
+      const kt      = new Date(pick.games.kickoff_time)
+      const day     = kt.getDay()  // 0=Sun,1=Mon...4=Thu
+      const team    = pick.selected_team.trim()
+
+      if (day === 4) grouped[email].thursday = team
+      else if (day === 1) grouped[email].monday = team
+      else grouped[email].best.push(team)
+    })
+
+    // 4) to array
+    setLpPicks(Object.values(grouped))
     setLpLoading(false)
   }
 
   return (
     <div style={{ padding: 20, fontFamily: 'sans-serif' }}>
       <h1>League Dashboard</h1>
-      <nav>
-        <Link href="/"><a>← Home</a></Link>
-      </nav>
+      <nav><Link href="/"><a>← Home</a></Link></nav>
 
       {/* Weekly Score */}
       <section style={{ marginTop: 40 }}>
-        <h2>Weekly Score Lookup</h2>
-        <div>
-          <label>
-            Email:{' '}
-            <input
-              type="email"
-              value={wsEmail}
-              onChange={e => setWsEmail(e.target.value)}
-            />
-          </label>{' '}
-          <label>
-            Week:{' '}
-            <input
-              type="number"
-              min={1}
-              value={wsWeek}
-              onChange={e => setWsWeek(e.target.value)}
-            />
-          </label>{' '}
-          <button onClick={fetchWeeklyScore} disabled={wsLoading}>
-            {wsLoading ? 'Loading…' : 'Get Score'}
-          </button>
-        </div>
+        <h2>Weekly Score</h2>
+        <label>
+          Email:{' '}
+          <input
+            type="email"
+            value={wsEmail}
+            onChange={e => setWsEmail(e.target.value)}
+          />
+        </label>{' '}
+        <label>
+          Week:{' '}
+          <input
+            type="number"
+            min={1}
+            value={wsWeek}
+            onChange={e => setWsWeek(e.target.value)}
+          />
+        </label>{' '}
+        <button onClick={fetchWeeklyScore} disabled={wsLoading}>
+          {wsLoading ? 'Loading…' : 'Get Score'}
+        </button>
         {wsError && <p style={{ color: 'red' }}>{wsError}</p>}
         {wsResult && (
-          <table border={1} cellPadding={8} style={{ borderCollapse: 'collapse' }}>
+          <table border={1} cellPadding={8} style={{ borderCollapse: 'collapse', marginTop: 10 }}>
             <thead>
               <tr>
                 <th>Email</th>
                 <th>Correct</th>
-                <th>Lock ✔</th>
-                <th>Lock ✘</th>
+                <th>Lock ✔</th>
+                <th>Lock ✘</th>
                 <th>Bonus</th>
                 <th>Points</th>
               </tr>
@@ -214,19 +256,19 @@ export default function Dashboard() {
         )}
       </section>
 
-      {/* League Leaderboard */}
+      {/* Leaderboard */}
       <section style={{ marginTop: 60 }}>
         <h2>League Leaderboard</h2>
         {lbLoading ? (
           <p>Loading leaderboard…</p>
         ) : (
-          <table border={1} cellPadding={8} style={{ borderCollapse: 'collapse' }}>
+          <table border={1} cellPadding={8} style={{ borderCollapse: 'collapse', marginTop: 10 }}>
             <thead>
               <tr>
                 <th>Rank</th>
                 <th>Username</th>
-                <th>Total Correct</th>
-                <th>Total Points</th>
+                <th>Total Correct</th>
+                <th>Total Points</th>
               </tr>
             </thead>
             <tbody>
@@ -245,48 +287,39 @@ export default function Dashboard() {
 
       {/* League Picks */}
       <section style={{ marginTop: 60 }}>
-        <h2>League Picks (All Users)</h2>
-        <div>
-          <label>
-            Week:{' '}
-            <input
-              type="number"
-              min={1}
-              value={lpWeek}
-              onChange={e => setLpWeek(e.target.value)}
-            />
-          </label>{' '}
-          <button onClick={loadLeaguePicks} disabled={lpLoading}>
-            {lpLoading ? 'Loading…' : 'Load Picks'}
-          </button>
-        </div>
-        {lpLoading ? (
-          <p>Loading picks…</p>
-        ) : (
+        <h2>League Picks</h2>
+        <label>
+          Week:{' '}
+          <input
+            type="number"
+            min={1}
+            value={lpWeek}
+            onChange={e => setLpWeek(e.target.value)}
+          />
+        </label>{' '}
+        <button onClick={loadLeaguePicks} disabled={lpLoading}>
+          {lpLoading ? 'Loading…' : 'Load Picks'}
+        </button>
+
+        {!lpLoading && lpPicks.length > 0 && (
           <table border={1} cellPadding={8} style={{ borderCollapse: 'collapse', marginTop: 10 }}>
             <thead>
               <tr>
-                <th>User</th>
-                <th>Game</th>
-                <th>Pick</th>
-                <th>Lock?</th>
+                <th>Username</th>
+                <th>Thursday Pick</th>
+                <th>Best‑3 Picks</th>
+                <th>Monday Pick</th>
               </tr>
             </thead>
             <tbody>
-              {lpPicks.map((p, i) => {
-                const g = p.games
-                const kickoff = new Date(g.kickoff_time).toLocaleString()
-                return (
-                  <tr key={i}>
-                    <td>{p.user_email}</td>
-                    <td>{`${g.away_team.trim()} @ ${g.home_team.trim()} (${kickoff})`}</td>
-                    <td>{p.selected_team.trim()}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      {p.is_lock ? '✔' : ''}
-                    </td>
-                  </tr>
-                )
-              })}
+              {lpPicks.map((u, i) => (
+                <tr key={i}>
+                  <td>{u.username}</td>
+                  <td style={{ textAlign: 'center' }}>{u.thursday}</td>
+                  <td>{u.best.join(', ')}</td>
+                  <td style={{ textAlign: 'center' }}>{u.monday}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}
