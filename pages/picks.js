@@ -15,7 +15,7 @@ export default function PickSubmission() {
   const [lockPick, setLockPick]         = useState(null)
   const [status, setStatus]             = useState(null)
 
-  // Load games once user is signed-in
+  // Load games once user is signed‑in
   useEffect(() => {
     if (!session) return
     const loadGames = async () => {
@@ -41,7 +41,7 @@ export default function PickSubmission() {
     return (
       <div style={{ padding: 20 }}>
         <p>
-          <Link href="/auth"><a>Please sign in to submit picks →</a></Link>
+          <Link href="/join‑league"><a>Please join the league to submit picks →</a></Link>
         </p>
       </div>
     )
@@ -68,7 +68,7 @@ export default function PickSubmission() {
     setStatus(null)
     const copy = { ...picks }
 
-    // un-select same pick
+    // un‑select same pick
     if (copy[gid] === team) {
       delete copy[gid]
       setPicks(copy)
