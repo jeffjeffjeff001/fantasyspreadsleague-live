@@ -236,7 +236,9 @@ export default function Admin() {
                 <tr key={g.id}>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{g.away_team}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{g.home_team}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{g.spread}</td>
+                  <td style={{ border: '1px solid #ccc', padding: 8 }}>
+                    {g.spread > 0 ? `+${g.spread}` : g.spread}
+                  </td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>
                     {new Date(g.kickoff_time).toLocaleString()}
                   </td>
