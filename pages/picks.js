@@ -47,37 +47,60 @@ export default function PickSubmission() {
     )
   }
 
-  // Helpers
-  const isThursday = iso => new Date(iso).getUTCDay() === 4
-  const isMonday   = iso => new Date(iso).getUTCDay() === 1
+  // Helpers — use local getDay() so Thu/Mon buckets match user TZ
+  const isThursday = iso => new Date(iso).getDay() === 4
+  const isMonday   = iso => new Date(iso).getDay() === 1
   const countCats  = map => {
-    let th=0, mo=0, be=0
+    let th = 0, mo = 0, be = 0
     Object.keys(map).forEach(id => {
-      const g = games.find(x=>x.id===id)
+      const g = games.find(x => x.id === id)
       if (!g) return
-      if (isThursday(g.kickoff_time)) th++
-      else if (isMonday(g.kickoff_time)) mo++
-      else be++
+      const day = new Date(g.kickoff_time).getDay()
+      if (day === 4)       th++
+      else if (day === 1)  mo++
+      else                 be++
     })
+    console.log('counts →', { th, mo, be })
     return { th, mo, be }
   }
 
   const handlePick = (gid, team) => {
     setStatus(null)
     const copy = { ...picks }
+
+    // un-select same pick
     if (copy[gid] === team) {
       delete copy[gid]
-      return setPicks(copy)
+      setPicks(copy)
+      return
     }
+
+    // max 5 total
     if (Object.keys(copy).length >= 5) {
-      return setStatus('🚫 You can only pick up to 5 games total.')
+      setStatus('🚫 You can only pick up to 5 games total.')
+      return
     }
-    const tmp = { ...copy, [gid]: team }
-    const { th, mo, be } = countCats(tmp)
-    if (th > 1) return setStatus('🚫 Only 1 Thursday pick allowed.')
-    if (mo > 1) return setStatus('🚫 Only 1 Monday pick allowed.')
-    if (be > 3) return setStatus('🚫 Only 3 “Best Choice” picks allowed.')
+
+    // tentatively add and count
     copy[gid] = team
+    const { th, mo, be } = countCats(copy)
+
+    if (th > 1) {
+      delete copy[gid]
+      setStatus('🚫 Only 1 Thursday pick allowed.')
+      return
+    }
+    if (mo > 1) {
+      delete copy[gid]
+      setStatus('🚫 Only 1 Monday pick allowed.')
+      return
+    }
+    if (be > 3) {
+      delete copy[gid]
+      setStatus('🚫 Only 3 “Best Choice” picks allowed.')
+      return
+    }
+
     setPicks(copy)
   }
 
@@ -146,9 +169,7 @@ export default function PickSubmission() {
         games.map(g => (
           <div key={g.id} style={{ marginBottom: 12 }}>
             <strong>
-              {g.away_team} @ {g.home_team} (
-              {g.spread > 0 ? `+${g.spread}` : g.spread}
-              ) —{' '}
+              {g.away_team} @ {g.home_team} ({g.spread}) —{' '}
               {new Date(g.kickoff_time).toLocaleString(undefined,{
                 weekday:'short',hour:'2-digit',minute:'2-digit'
               })}
