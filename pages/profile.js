@@ -1,4 +1,5 @@
 // pages/profile.js
+
 import { useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabaseClient'
@@ -127,7 +128,9 @@ export default function UserProfile() {
                       })}
                     </small>
                   </td>
-                  <td style={{border:'1px solid #ccc',padding:8}}>{g.spread}</td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>
+                    {g.spread > 0 ? `+${g.spread}` : g.spread}
+                  </td>
                   <td style={{border:'1px solid #ccc',padding:8}}>
                     {pick.selected_team}
                   </td>
