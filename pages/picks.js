@@ -1,4 +1,5 @@
 // pages/picks.js
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabaseClient'
@@ -87,10 +88,10 @@ export default function PickSubmission() {
   const savePicks = async () => {
     const entries = Object.entries(picks)
     const inserts = entries.map(([gid, team]) => ({
-      user_email: session.user.email,
-      game_id:     gid,
+      user_email:    session.user.email,
+      game_id:       gid,
       selected_team: team,
-      is_lock:     gid === lockPick
+      is_lock:       gid === lockPick
     }))
     const { error } = await supabase.from('picks').insert(inserts)
     if (error) {
@@ -145,7 +146,9 @@ export default function PickSubmission() {
         games.map(g => (
           <div key={g.id} style={{ marginBottom: 12 }}>
             <strong>
-              {g.away_team} @ {g.home_team} ({g.spread}) —{' '}
+              {g.away_team} @ {g.home_team} (
+              {g.spread > 0 ? `+${g.spread}` : g.spread}
+              ) —{' '}
               {new Date(g.kickoff_time).toLocaleString(undefined,{
                 weekday:'short',hour:'2-digit',minute:'2-digit'
               })}
