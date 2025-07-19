@@ -169,7 +169,8 @@ export default function PickSubmission() {
         games.map(g => (
           <div key={g.id} style={{ marginBottom: 12 }}>
             <strong>
-              {g.away_team} @ {g.home_team} ({g.spread}) —{' '}
+              {g.away_team} @ {g.home_team}{' '}
+              ({g.spread > 0 ? `+${g.spread}` : g.spread}) —{' '}
               {new Date(g.kickoff_time).toLocaleString(undefined,{
                 weekday:'short',hour:'2-digit',minute:'2-digit'
               })}
