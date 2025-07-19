@@ -19,7 +19,7 @@ export default function UserProfile() {
     return (
       <div style={{ padding: 20 }}>
         <p>
-          <Link href="/auth"><a>Sign in to view your profile</a></Link>
+          <Link href="/join‑league"><a>Join the league to view your profile</a></Link>
         </p>
       </div>
     )
@@ -53,7 +53,7 @@ export default function UserProfile() {
     if (error) {
       setError(error.message)
     } else {
-      // use local getDay() so Thursday/Monday match user's timezone
+      // use local getDay() so Thursday/Monday match user TZ
       const getDow = iso => new Date(iso).getDay()
       const thu = [], mon = [], best = []
 
