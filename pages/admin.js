@@ -6,8 +6,8 @@ import { supabase } from '../lib/supabaseClient'
 
 export default function Admin() {
   // ── ADMIN PASSWORD GATE ────────────────────────────────────────────────
-  const ADMIN_PW = process.env.NEXT_PUBLIC_ADMIN_PASSWORD
-  const [enteredPw, setEnteredPw] = useState('')
+  const ADMIN_PW    = process.env.NEXT_PUBLIC_ADMIN_PASSWORD
+  const [enteredPw, setEnteredPw]   = useState('')
   const [authorized, setAuthorized] = useState(false)
 
   const handlePwSubmit = e => {
@@ -50,20 +50,20 @@ export default function Admin() {
   const [loadingProfiles, setLoadingProfiles] = useState(false)
 
   // New game form state
-  const [newGameAway, setNewGameAway]         = useState('')
-  const [newGameHome, setNewGameHome]         = useState('')
-  const [newGameSpread, setNewGameSpread]     = useState('')
-  const [newGameKickoff, setNewGameKickoff]   = useState('')
+  const [newGameAway, setNewGameAway]       = useState('')
+  const [newGameHome, setNewGameHome]       = useState('')
+  const [newGameSpread, setNewGameSpread]   = useState('')
+  const [newGameKickoff, setNewGameKickoff] = useState('')
 
   // View user picks state
-  const [userForPicks, setUserForPicks]       = useState('')
-  const [weekForPicks, setWeekForPicks]       = useState(1)
-  const [userPicks, setUserPicks]             = useState([])
-  const [loadingPicks, setLoadingPicks]       = useState(false)
+  const [userForPicks, setUserForPicks]   = useState('')
+  const [weekForPicks, setWeekForPicks]   = useState(1)
+  const [userPicks, setUserPicks]         = useState([])
+  const [loadingPicks, setLoadingPicks]   = useState(false)
 
   // Weekly scores state
-  const [weeklyScores, setWeeklyScores]       = useState([])
-  const [loadingScores, setLoadingScores]     = useState(false)
+  const [weeklyScores, setWeeklyScores]   = useState([])
+  const [loadingScores, setLoadingScores] = useState(false)
 
   useEffect(() => {
     loadGames()
@@ -150,7 +150,7 @@ export default function Admin() {
 
   // Clear all games & picks for the current week
   async function handleClearWeek() {
-    if (!confirm(Clear all games and picks for Week ${selectedWeek}?)) return
+    if (!confirm(`Clear all games and picks for Week ${selectedWeek}?`)) return
 
     // 1) delete all picks for that week
     const { error: pickErr } = await supabase
@@ -178,7 +178,7 @@ export default function Admin() {
 
   // ── User management ────────────────────────────────────────────────
   async function handleDeleteUser(email) {
-    if (!confirm(Delete user ${email}?)) return
+    if (!confirm(`Delete user ${email}?`)) return
     const res = await fetch('/api/delete-profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -223,7 +223,7 @@ export default function Admin() {
   // ── Calculate scores ───────────────────────────────────────────────
   async function calculateScores() {
     setLoadingScores(true)
-    const res = await fetch(/api/weekly-scores?week=${selectedWeek})
+    const res = await fetch(`/api/weekly-scores?week=${selectedWeek}`)
     const data = await res.json()
     if (!res.ok) {
       alert('Error calculating scores: ' + (data.error || JSON.stringify(data)))
@@ -275,7 +275,7 @@ export default function Admin() {
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{g.away_team}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>{g.home_team}</td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>
-                    {g.spread > 0 ? +${g.spread} : g.spread}
+                    {g.spread > 0 ? `+${g.spread}` : g.spread}
                   </td>
                   <td style={{ border: '1px solid #ccc', padding: 8 }}>
                     {new Date(g.kickoff_time).toLocaleString()}
@@ -434,8 +434,7 @@ export default function Admin() {
         <button onClick={calculateScores}>Calculate Scores</button>
         {loadingScores && <p>Calculating…</p>}
         {weeklyScores.length > 0 && (
-          <table style={{ width: '100%', borderCollapse:
- 'collapse', marginTop: 12 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
             <thead>
               <tr>
                 <th style={{ border: '1px solid #ccc', padding: 8 }}>Email</th>
