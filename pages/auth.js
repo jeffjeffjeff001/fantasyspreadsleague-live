@@ -13,6 +13,7 @@ export default function AuthPage() {
   const [error, setError]     = useState('')
   const router = useRouter()
 
+  // ── Sign‑Up Handler ────────────────────────────────────────────────
   const handleSignUp = async () => {
     setError('')
     // ensure username unique
@@ -24,23 +25,28 @@ export default function AuthPage() {
     if (existing) {
       return setError('Username already taken.')
     }
+    // create user in Supabase Auth, plus profile metadata
     const { error: err } = await supabase.auth.signUp(
       { email, password },
       { data: { first_name: firstName, last_name: lastName, username } }
     )
     if (err) return setError(err.message)
 
-    // insert into profiles
+    // mirror into your profiles table
     await supabase.from('profiles').insert([
       { email, username, first_name: firstName, last_name: lastName }
     ])
+
+    // redirect to picks page
     router.push('/picks')
   }
 
+  // ── Sign‑In Handler ────────────────────────────────────────────────
   const handleSignIn = async () => {
     setError('')
     const { error: err } = await supabase.auth.signInWithPassword({
-      email, password
+      email,
+      password
     })
     if (err) return setError(err.message)
     router.push('/picks')
@@ -90,9 +96,13 @@ export default function AuthPage() {
       />
 
       {mode === 'sign-in' ? (
-        <button onClick={handleSignIn}>Sign In</button>
+        <button onClick={handleSignIn} style={{ padding: '8px 16px' }}>
+          Sign In
+        </button>
       ) : (
-        <button onClick={handleSignUp}>Sign Up</button>
+        <button onClick={handleSignUp} style={{ padding: '8px 16px' }}>
+          Sign Up
+        </button>
       )}
 
       <p style={{ marginTop: 12 }}>
