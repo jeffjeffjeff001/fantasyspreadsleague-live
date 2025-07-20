@@ -5,43 +5,10 @@ import Link from 'next/link'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Admin() {
-  // ── ADMIN PASSWORD GATE ────────────────────────────────────────────────
+  // ── HOOKS & PASSWORD GATE STATE ────────────────────────────────────────
   const ADMIN_PW = process.env.NEXT_PUBLIC_ADMIN_PASSWORD
-  const [enteredPw, setEnteredPw] = useState('')
-  const [authorized, setAuthorized] = useState(false)
-
-  const handlePwSubmit = e => {
-    e.preventDefault()
-    if (enteredPw === ADMIN_PW) {
-      setAuthorized(true)
-    } else {
-      alert('❌ Incorrect password')
-      setEnteredPw('')
-    }
-  }
-
-  if (!authorized) {
-    return (
-      <div style={{ padding: 20 }}>
-        <h1>Admin Login</h1>
-        <form onSubmit={handlePwSubmit}>
-          <label>
-            Enter admin password:
-            <input
-              type="password"
-              value={enteredPw}
-              onChange={e => setEnteredPw(e.target.value)}
-              style={{ marginLeft: 8 }}
-            />
-          </label>
-          <button type="submit" style={{ marginLeft: 12 }}>
-            Unlock
-          </button>
-        </form>
-      </div>
-    )
-  }
-  // ── END PASSWORD GATE ─────────────────────────────────────────────────
+  const [enteredPw, setEnteredPw]         = useState('')
+  const [authorized, setAuthorized]       = useState(false)
 
   const [selectedWeek, setSelectedWeek]       = useState(1)
   const [games, setGames]                     = useState([])
@@ -65,6 +32,41 @@ export default function Admin() {
   const [weeklyScores, setWeeklyScores]       = useState([])
   const [loadingScores, setLoadingScores]     = useState(false)
 
+  // ── PASSWORD GATE HANDLER ─────────────────────────────────────────────
+  const handlePwSubmit = e => {
+    e.preventDefault()
+    if (enteredPw === ADMIN_PW) {
+      setAuthorized(true)
+    } else {
+      alert('❌ Incorrect password')
+      setEnteredPw('')
+    }
+  }
+
+  // ── RENDER LOGIN IF NOT AUTHORIZED ───────────────────────────────────
+  if (!authorized) {
+    return (
+      <div style={{ padding: 20 }}>
+        <h1>Admin Login</h1>
+        <form onSubmit={handlePwSubmit}>
+          <label>
+            Enter admin password:
+            <input
+              type="password"
+              value={enteredPw}
+              onChange={e => setEnteredPw(e.target.value)}
+              style={{ marginLeft: 8 }}
+            />
+          </label>
+          <button type="submit" style={{ marginLeft: 12 }}>
+            Unlock
+          </button>
+        </form>
+      </div>
+    )
+  }
+
+  // ── EFFECT TO LOAD DATA WHEN WEEK CHANGES ────────────────────────────
   useEffect(() => {
     loadGames()
     loadProfiles()
@@ -434,8 +436,7 @@ export default function Admin() {
         <button onClick={calculateScores}>Calculate Scores</button>
         {loadingScores && <p>Calculating…</p>}
         {weeklyScores.length > 0 && (
-          <table style={{ width: '100%', borderCollapse:
- 'collapse', marginTop: 12 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
             <thead>
               <tr>
                 <th style={{ border: '1px solid #ccc', padding: 8 }}>Email</th>
