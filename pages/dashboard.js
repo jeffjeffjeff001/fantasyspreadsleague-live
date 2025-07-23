@@ -72,15 +72,27 @@ export default function Dashboard() {
         stats[p.email] = {
           username:     p.username,
           totalCorrect: 0,
-          totalPoints:  0
+          totalPoints:  0,
+          // track picks per week for perfect-week bonus
+          weeklyStats: {} 
         }
       })
 
       // 5) score every pick
       picks.forEach(pick => {
         const g = pick.games
+        const week = g.week
+        const u = stats[pick.user_email]
+        if (!u) return
+
+        // init this week counters
+        if (!u.weeklyStats[week]) {
+          u.weeklyStats[week] = { total: 0, correct: 0 }
+        }
+        u.weeklyStats[week].total += 1
+
         const result = results.find(r =>
-          r.week === g.week &&
+          r.week === week &&
           r.home_team.trim() === g.home_team.trim() &&
           r.away_team.trim() === g.away_team.trim()
         )
@@ -92,20 +104,29 @@ export default function Dashboard() {
           ? result.home_team.trim()
           : result.away_team.trim()
 
-        const picked    = pick.selected_team.trim()
-        const u         = stats[pick.user_email]
-        if (!u) return
-
+        const picked = pick.selected_team.trim()
         if (picked === winner) {
           u.totalCorrect += 1
           u.totalPoints  += 1
-          if (pick.is_lock) u.totalPoints += 2
+          u.weeklyStats[week].correct += 1
+          if (pick.is_lock) {
+            u.totalPoints += 2
+          }
         } else if (pick.is_lock) {
           u.totalPoints -= 2
         }
       })
 
-      // 6) sort
+      // 6) perfect-week bonus: +3 if user got all their picks correct that week
+      Object.values(stats).forEach(u => {
+        Object.values(u.weeklyStats).forEach(ws => {
+          if (ws.correct === ws.total) {
+            u.totalPoints += 3
+          }
+        })
+      })
+
+      // 7) sort
       const list = Object.values(stats)
       list.sort((a, b) => {
         if (b.totalPoints !== a.totalPoints) {
@@ -187,16 +208,16 @@ export default function Dashboard() {
           monday:    ''
         }
       }
-      const kt      = new Date(pick.games.kickoff_time)
-      const day     = kt.getDay()  // 0=Sun,1=Mon...4=Thu
-      const team    = pick.selected_team.trim()
+      const kt   = new Date(pick.games.kickoff_time)
+      const day  = kt.getDay()  // 0=Sun,1=Mon...4=Thu
+      const team = pick.selected_team.trim()
 
-      if (day === 4) grouped[email].thursday = team
-      else if (day === 1) grouped[email].monday = team
-      else grouped[email].best.push(team)
+      if (day === 4)      grouped[email].thursday = team
+      else if (day === 1) grouped[email].monday   = team
+      else                grouped[email].best.push(team)
     })
 
-    // ── NEW: ensure every league member appears ─────────────────────────
+    // ── ensure every league member appears (even with no picks) ─────────
     profiles.forEach(p => {
       if (!grouped[p.email]) {
         grouped[p.email] = {
