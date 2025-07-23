@@ -73,7 +73,7 @@ export default function Dashboard() {
           username:     p.username,
           totalCorrect: 0,
           totalPoints:  0,
-          weeklyStats:  {} // track per-week totals
+          weeklyStats:  {}
         }
       })
 
@@ -160,16 +160,29 @@ export default function Dashboard() {
   // — Load & group league picks —
   async function loadLeaguePicks() {
     setLpLoading(true)
-    try {                                                   // ← ADDED
+    try {
       // 1) fetch profiles for username lookup
-      const { data: profiles } = await supabase
+      const { data: profiles, error: profErr } = await supabase
         .from('profiles')
         .select('email,username')
-      const userMap = {}
-      profiles.forEach(p => { userMap[p.email] = p.username })
+      if (profErr) {
+        console.error(profErr)
+        // still proceed to show nobody picked
+      }
+
+      // build a map and init every user’s empty row
+      const grouped = {}
+      (profiles || []).forEach(p => {
+        grouped[p.email] = {
+          username: p.username,
+          thursday: '',
+          best:     [],
+          monday:   ''
+        }
+      })
 
       // 2) fetch picks+games for lpWeek
-      const { data: picks, error } = await supabase
+      const { data: picksData, error: pickErr } = await supabase
         .from('picks')
         .select(`
           user_email,
@@ -182,51 +195,34 @@ export default function Dashboard() {
             week
           )
         `)
-        .eq('games.week', lpWeek)
+        .eq('games.week', Number(lpWeek))  // ← coerce to number
 
-      if (error) {
-        console.error(error)
-        setLpPicks([])
-        return
+      if (pickErr) {
+        console.error(pickErr)
       }
 
-      // 3) group by user who made picks
-      const grouped = {}
-      picks.forEach(pick => {
+      // 3) overlay any actual picks
+      (picksData || []).forEach(pick => {
         const email = pick.user_email
         if (!grouped[email]) {
           grouped[email] = {
-            username: userMap[email] || email,
+            username: email,
             thursday: '',
             best:     [],
             monday:   ''
           }
         }
-        const kt   = new Date(pick.games.kickoff_time)
-        const day  = kt.getDay()   // 0=Sun,1=Mon...4=Thu
+        const day  = new Date(pick.games.kickoff_time).getDay()
         const team = pick.selected_team.trim()
-
         if (day === 4)      grouped[email].thursday = team
         else if (day === 1) grouped[email].monday   = team
         else                grouped[email].best.push(team)
       })
 
-      // 4) ensure every league member appears, even with zero picks
-      profiles.forEach(p => {                            // ← ADDED
-        if (!grouped[p.email]) {
-          grouped[p.email] = {
-            username: p.username,
-            thursday: '',
-            best:     [],
-            monday:   ''
-          }
-        }
-      })
-
-      // 5) to array & done
+      // 4) commit to state
       setLpPicks(Object.values(grouped))
     } finally {
-      setLpLoading(false)                                // ← ADDED
+      setLpLoading(false)
     }
   }
 
