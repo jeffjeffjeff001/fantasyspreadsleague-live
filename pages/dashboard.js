@@ -148,8 +148,11 @@ export default function Dashboard() {
       const json = await resp.json()
       if (!resp.ok) throw new Error(json.error || 'Error')
       const me = json.find(r => r.email === wsEmail.trim())
-      if (!me) setWsError('No picks found for that email & week.')
-      else      setWsResult(me)
+      if (!me) {
+        setWsError('No picks found for that email & week.')
+      } else {
+        setWsResult(me)
+      }
     } catch (err) {
       setWsError(err.message)
     } finally {
@@ -167,10 +170,9 @@ export default function Dashboard() {
         .select('email,username')
       if (profErr) {
         console.error(profErr)
-        // still proceed to show nobody picked
       }
 
-      // build a map and init every user’s empty row
+      // 2) init one row per user
       const grouped = {}
       (profiles || []).forEach(p => {
         grouped[p.email] = {
@@ -181,7 +183,7 @@ export default function Dashboard() {
         }
       })
 
-      // 2) fetch picks+games for lpWeek
+      // 3) fetch picks+games for lpWeek
       const { data: picksData, error: pickErr } = await supabase
         .from('picks')
         .select(`
@@ -195,13 +197,13 @@ export default function Dashboard() {
             week
           )
         `)
-        .eq('games.week', Number(lpWeek))  // ← coerce to number
+        .eq('games.week', Number(lpWeek))    // ← ensure numeric match
 
       if (pickErr) {
         console.error(pickErr)
       }
 
-      // 3) overlay any actual picks
+      // 4) overlay actual picks
       (picksData || []).forEach(pick => {
         const email = pick.user_email
         if (!grouped[email]) {
@@ -219,7 +221,7 @@ export default function Dashboard() {
         else                grouped[email].best.push(team)
       })
 
-      // 4) commit to state
+      // 5) commit
       setLpPicks(Object.values(grouped))
     } finally {
       setLpLoading(false)
