@@ -196,6 +196,18 @@ export default function Dashboard() {
       else grouped[email].best.push(team)
     })
 
+    // ── NEW: ensure every league member appears ─────────────────────────
+    profiles.forEach(p => {
+      if (!grouped[p.email]) {
+        grouped[p.email] = {
+          username: p.username,
+          thursday: '',
+          best:     [],
+          monday:   ''
+        }
+      }
+    })
+
     // 4) to array
     setLpPicks(Object.values(grouped))
     setLpLoading(false)
