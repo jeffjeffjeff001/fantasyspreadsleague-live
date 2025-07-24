@@ -1,42 +1,14 @@
-// pages/admin.js
-
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Admin() {
-  // ── STATE HOOKS ────────────────────────────────────────────────────────
-  // Admin‑password gate
+  // ── ADMIN PASSWORD GATE ────────────────────────────────────────────────
   const ADMIN_PW = process.env.NEXT_PUBLIC_ADMIN_PASSWORD
-  const [enteredPw, setEnteredPw]   = useState('')
+  const [enteredPw, setEnteredPw] = useState('')
   const [authorized, setAuthorized] = useState(false)
 
-  // Core admin data
-  const [selectedWeek, setSelectedWeek]       = useState(1)
-  const [games, setGames]                     = useState([])
-  const [profiles, setProfiles]               = useState([])
-  const [loadingGames, setLoadingGames]       = useState(false)
-  const [loadingProfiles, setLoadingProfiles] = useState(false)
-
-  // New‑game form
-  const [newGameAway, setNewGameAway]       = useState('')
-  const [newGameHome, setNewGameHome]       = useState('')
-  const [newGameSpread, setNewGameSpread]   = useState('')
-  const [newGameKickoff, setNewGameKickoff] = useState('')
-
-  // View user picks
-  const [userForPicks, setUserForPicks]   = useState('')
-  const [weekForPicks, setWeekForPicks]   = useState(1)
-  const [userPicks, setUserPicks]         = useState([])
-  const [loadingPicks, setLoadingPicks]   = useState(false)
-
-  // Weekly scores
-  const [weeklyScores, setWeeklyScores]   = useState([])
-  const [loadingScores, setLoadingScores] = useState(false)
-
-  // ── HANDLERS ───────────────────────────────────────────────────────────
-  // Admin‑password submit
-  function handlePwSubmit(e) {
+  const handlePwSubmit = e => {
     e.preventDefault()
     if (enteredPw === ADMIN_PW) {
       setAuthorized(true)
@@ -46,174 +18,6 @@ export default function Admin() {
     }
   }
 
-  // Load games
-  async function loadGames() {
-    setLoadingGames(true)
-    const { data, error } = await supabase
-      .from('games')
-      .select('*')
-      .eq('week', selectedWeek)
-      .order('kickoff_time', { ascending: true })
-    if (error) {
-      alert('Error loading games: ' + error.message)
-    } else {
-      setGames(data)
-    }
-    setLoadingGames(false)
-  }
-
-  // Load profiles
-  async function loadProfiles() {
-    setLoadingProfiles(true)
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('email, username, first_name, last_name')
-      .order('username', { ascending: true })
-    if (error) {
-      alert('Error loading profiles: ' + error.message)
-    } else {
-      setProfiles(data)
-    }
-    setLoadingProfiles(false)
-  }
-
-  // Add a game
-  async function handleAddGame() {
-    const { error } = await supabase.from('games').insert([{
-      week:         selectedWeek,
-      away_team:    newGameAway,
-      home_team:    newGameHome,
-      spread:       parseFloat(newGameSpread),
-      kickoff_time: new Date(newGameKickoff).toISOString(),
-    }])
-    if (error) {
-      alert('Error adding game: ' + error.message)
-    } else {
-      setNewGameAway('')
-      setNewGameHome('')
-      setNewGameSpread('')
-      setNewGameKickoff('')
-      loadGames()
-    }
-  }
-
-  // Delete a game & its picks
-  async function handleDeleteGame(id) {
-    if (!confirm('Delete this game and all its picks?')) return
-
-    const { error: pickErr } = await supabase
-      .from('picks')
-      .delete()
-      .eq('game_id', id)
-    if (pickErr) {
-      alert('Error deleting associated picks: ' + pickErr.message)
-      return
-    }
-
-    const { error: gameErr } = await supabase
-      .from('games')
-      .delete()
-      .eq('id', id)
-    if (gameErr) {
-      alert('Error deleting game: ' + gameErr.message)
-    } else {
-      loadGames()
-    }
-  }
-
-  // Clear week
-  async function handleClearWeek() {
-    if (!confirm(`Clear all games and picks for Week ${selectedWeek}?`)) return
-
-    const { error: pickErr } = await supabase
-      .from('picks')
-      .delete()
-      .eq('games.week', selectedWeek)
-    if (pickErr) {
-      alert('Error clearing picks: ' + pickErr.message)
-      return
-    }
-
-    const { error: gameErr } = await supabase
-      .from('games')
-      .delete()
-      .eq('week', selectedWeek)
-    if (gameErr) {
-      alert('Error clearing games: ' + gameErr.message)
-    } else {
-      setGames([])
-    }
-  }
-
-  // Delete a user
-  async function handleDeleteUser(email) {
-    if (!confirm(`Delete user ${email}?`)) return
-    const res = await fetch('/api/delete-profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    })
-    const { error } = await res.json()
-    if (error) alert('Error deleting user: ' + error)
-    else loadProfiles()
-  }
-
-  // Load picks for a user
-  async function loadUserPicks() {
-    if (!userForPicks) {
-      alert('Please select a user')
-      return
-    }
-    setLoadingPicks(true)
-    const { data, error } = await supabase
-      .from('picks')
-      .select('id, selected_team, is_lock, games(away_team,home_team,kickoff_time)')
-      .eq('user_email', userForPicks)
-      .eq('games.week', weekForPicks)
-      .order('kickoff_time', { foreignTable: 'games', ascending: true })
-    if (error) {
-      alert('Error loading picks: ' + error.message)
-    } else {
-      setUserPicks(data)
-    }
-    setLoadingPicks(false)
-  }
-
-  // Delete a pick
-  async function handleDeletePick(pickId) {
-    if (!confirm('Delete this pick?')) return
-    const { error } = await supabase
-      .from('picks')
-      .delete()
-      .eq('id', pickId)
-    if (error) alert('Error deleting pick: ' + error.message)
-    else loadUserPicks()
-  }
-
-  // Calculate scores
-  async function calculateScores() {
-    setLoadingScores(true)
-    const res = await fetch(`/api/weekly-scores?week=${selectedWeek}`)
-    const data = await res.json()
-    if (!res.ok) {
-      alert('Error calculating scores: ' + (data.error || JSON.stringify(data)))
-      setWeeklyScores([])
-    } else {
-      setWeeklyScores(data)
-    }
-    setLoadingScores(false)
-  }
-
-  // ── EFFECT ───────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (authorized) {
-      loadGames()
-      loadProfiles()
-    }
-  }, [selectedWeek, authorized])
-
-  // ── RENDER ───────────────────────────────────────────────────────────
-  // 1) Login form
   if (!authorized) {
     return (
       <div style={{ padding: 20 }}>
@@ -235,8 +39,208 @@ export default function Admin() {
       </div>
     )
   }
+  // ── END PASSWORD GATE ─────────────────────────────────────────────────
 
-  // 2) Full Admin UI
+  const [selectedWeek, setSelectedWeek]       = useState(1)
+  const [games, setGames]                     = useState([])
+  const [profiles, setProfiles]               = useState([])
+  const [loadingGames, setLoadingGames]       = useState(false)
+  const [loadingProfiles, setLoadingProfiles] = useState(false)
+
+  // New game form state
+  const [newGameAway, setNewGameAway]         = useState('')
+  const [newGameHome, setNewGameHome]         = useState('')
+  const [newGameSpread, setNewGameSpread]     = useState('')
+  const [newGameKickoff, setNewGameKickoff]   = useState('')
+
+  // View user picks state
+  const [userForPicks, setUserForPicks]       = useState('')
+  const [weekForPicks, setWeekForPicks]       = useState(1)
+  const [userPicks, setUserPicks]             = useState([])
+  const [loadingPicks, setLoadingPicks]       = useState(false)
+
+  // Weekly scores state
+  const [weeklyScores, setWeeklyScores]       = useState([])
+  const [loadingScores, setLoadingScores]     = useState(false)
+
+  useEffect(() => {
+    loadGames()
+    loadProfiles()
+  }, [selectedWeek])
+
+  // ── Data loading ──────────────────────────────────────────────────
+  async function loadGames() {
+    setLoadingGames(true)
+    const { data, error } = await supabase
+      .from('games')
+      .select('*')
+      .eq('week', selectedWeek)
+      .order('kickoff_time', { ascending: true })
+    if (error) {
+      alert('Error loading games: ' + error.message)
+    } else {
+      setGames(data)
+    }
+    setLoadingGames(false)
+  }
+
+  async function loadProfiles() {
+    setLoadingProfiles(true)
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('email, username, first_name, last_name')
+      .order('username', { ascending: true })
+    if (error) {
+      alert('Error loading profiles: ' + error.message)
+    } else {
+      setProfiles(data)
+    }
+    setLoadingProfiles(false)
+  }
+
+  // ── Game management ────────────────────────────────────────────────
+  async function handleAddGame() {
+    const { error } = await supabase.from('games').insert([{
+      week:         selectedWeek,
+      away_team:    newGameAway,
+      home_team:    newGameHome,
+      spread:       parseFloat(newGameSpread),
+      kickoff_time: new Date(newGameKickoff).toISOString(),
+    }])
+    if (error) {
+      alert('Error adding game: ' + error.message)
+    } else {
+      setNewGameAway('')
+      setNewGameHome('')
+      setNewGameSpread('')
+      setNewGameKickoff('')
+      loadGames()
+    }
+  }
+
+  // Delete a single game (and all its picks)
+  async function handleDeleteGame(id) {
+    if (!confirm('Delete this game and all its picks?')) return
+
+    // 1) delete any picks for that game
+    const { error: pickErr } = await supabase
+      .from('picks')
+      .delete()
+      .eq('game_id', id)
+
+    if (pickErr) {
+      alert('Error deleting associated picks: ' + pickErr.message)
+      return
+    }
+
+    // 2) now delete the game itself
+    const { error: gameErr } = await supabase
+      .from('games')
+      .delete()
+      .eq('id', id)
+
+    if (gameErr) {
+      alert('Error deleting game: ' + gameErr.message)
+    } else {
+      loadGames()
+    }
+  }
+
+  // Clear all games & picks for the current week
+  async function handleClearWeek() {
+    if (!confirm(`Clear all games and picks for Week ${selectedWeek}?`)) return
+
+    // 1) delete all picks for that week
+    const { error: pickErr } = await supabase
+      .from('picks')
+      .delete()
+      .eq('games.week', selectedWeek)
+
+    if (pickErr) {
+      alert('Error clearing picks: ' + pickErr.message)
+      return
+    }
+
+    // 2) delete all games for that week
+    const { error: gameErr } = await supabase
+      .from('games')
+      .delete()
+      .eq('week', selectedWeek)
+
+    if (gameErr) {
+      alert('Error clearing games: ' + gameErr.message)
+    } else {
+      setGames([])
+    }
+  }
+
+  // ── User management ────────────────────────────────────────────────
+  async function handleDeleteUser(email) {
+    if (!confirm(`Delete user ${email}?`)) return
+    const res = await fetch('/api/delete-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    const { error } = await res.json()
+    if (error) alert('Error deleting user: ' + error)
+    else loadProfiles()
+  }
+
+  // ── View user picks ────────────────────────────────────────────────
+  async function loadUserPicks() {
+    if (!userForPicks) {
+      alert('Please select a user')
+      return
+    }
+    setLoadingPicks(true)
+
+    // 1) fetch all picks joined to games
+    const { data, error } = await supabase
+      .from('picks')
+      .select('id, selected_team, is_lock, games(away_team,home_team,kickoff_time)')
+      .eq('user_email', userForPicks)
+      .eq('games.week', weekForPicks)
+      .order('kickoff_time', { foreignTable: 'games', ascending: true })
+
+    if (error) {
+      alert('Error loading picks: ' + error.message)
+      setLoadingPicks(false)
+      return
+    }
+
+    // 2) drop any pick where the game join came back null
+    const valid = data.filter(pk => pk.games && pk.games.kickoff_time)
+
+    // 3) render
+    setUserPicks(valid)
+    setLoadingPicks(false)
+  }
+
+  async function handleDeletePick(pickId) {
+    if (!confirm('Delete this pick?')) return
+    const { error } = await supabase
+      .from('picks')
+      .delete()
+      .eq('id', pickId)
+    if (error) alert('Error deleting pick: ' + error.message)
+    else loadUserPicks()
+  }
+
+  // ── Calculate scores ───────────────────────────────────────────────
+  async function calculateScores() {
+    setLoadingScores(true)
+    const res = await fetch(`/api/weekly-scores?week=${selectedWeek}`)
+    const data = await res.json()
+    if (!res.ok) {
+      alert('Error calculating scores: ' + (data.error || JSON.stringify(data)))
+      setWeeklyScores([])
+    } else {
+      setWeeklyScores(data)
+    }
+    setLoadingScores(false)
+  }
+
   return (
     <div style={{ padding: 20 }}>
       <h1>Admin</h1>
@@ -249,7 +253,7 @@ export default function Admin() {
           <label>Week:&nbsp;
             <input
               type="number"
-              min="1"
+              min="1"}
               value={selectedWeek}
               onChange={e => setSelectedWeek(parseInt(e.target.value, 10) || 1)}
               style={{ width: 60 }}
@@ -286,7 +290,7 @@ export default function Admin() {
                   <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
                     <button
                       onClick={() => handleDeleteGame(g.id)}
-                      style={{ background: 'red', color: 'white', padding: '6px 12px', border: 'none' }}
+                      style={{ background: 'red', color: 'white', padding: '6px 12px', border: 'none'}}
                     >
                       Delete
                     </button>
@@ -352,7 +356,7 @@ export default function Admin() {
                   <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
                     <button
                       onClick={() => handleDeleteUser(p.email)}
-                      style={{ background: 'red', color: 'white', padding: '6px 12px', border: 'none' }}
+                      style={{ background: 'red', color: 'white', padding: '6px 12px', border: 'none'}}
                     >
                       Delete
                     </button>
@@ -414,7 +418,7 @@ export default function Admin() {
                   <td style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
                     <button
                       onClick={() => handleDeletePick(pk.id)}
-                      style={{ background: 'red', color: 'white', padding: '6px 12px', border: 'none' }}
+                      style={{ background: 'red', color: 'white', padding: '6px 12px', border: 'none'}}
                     >
                       Delete
                     </button>
@@ -440,23 +444,23 @@ export default function Admin() {
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
             <thead>
               <tr>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Email</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Points</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Correct</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Lock ✔</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Lock ✘</th>
-                <th style={{ border: '1px solid #ccc', padding: 8 }}>Bonus</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Email</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Points</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Correct</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Lock ✔</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Lock ✘</th>
+                <th style={{border:'1px solid #ccc',padding:8}}>Bonus</th>
               </tr>
             </thead>
             <tbody>
               {weeklyScores.map(u => (
                 <tr key={u.email}>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.email}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.weeklyPoints}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.correct}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.lockCorrect}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.lockIncorrect}</td>
-                  <td style={{ border: '1px solid #ccc', padding: 8 }}>{u.perfectBonus}</td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>{u.email}</td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>{u.weeklyPoints}</td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>{u.correct}</td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>{u.lockCorrect}</td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>{u.lockIncorrect}</td>
+                  <td style={{border:'1px solid #ccc',padding:8}}>{u.perfectBonus}</td>
                 </tr>
               ))}
             </tbody>
