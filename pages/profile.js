@@ -1,3 +1,5 @@
+// pages/profile.js
+
 import { useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabaseClient'
@@ -50,37 +52,44 @@ export default function UserProfile() {
 
     if (error) {
       setError(error.message)
-      setLoading(false)
-      return
-    }
+    } else {
+      // **DROP any pick whose joined game is null**
+      const valid = data.filter(p => p.games && p.games.kickoff_time)
 
-    // ← ADD THIS FILTER to drop any pick whose game join came back null
-    const valid = data.filter(p => p.games && p.games.kickoff_time)
+      // use local getDay() so Thursday/Monday match user TZ
+      const getDow = iso => new Date(iso).getDay()
+      const thu = [], mon = [], best = []
 
-    // Now apply your existing bucketing logic on `valid` instead of `data`
-    const getDow = iso => new Date(iso).getDay()
-    const thu = [], mon = [], best = []
-    valid.forEach(pick => {
-      const dow = getDow(pick.games.kickoff_time)
-      if (dow === 4 && thu.length < 1)       thu.push(pick)
-      else if (dow === 1 && mon.length < 1)  mon.push(pick)
-      else if (dow !== 1 && dow !== 4 && best.length < 3) best.push(pick)
-    })
+      // bucket into Thursday, Monday, Best‑3
+      valid.forEach(pick => {
+        const dow = getDow(pick.games.kickoff_time)
+        if (dow === 4 && thu.length < 1) {
+          thu.push(pick)
+        } else if (dow === 1 && mon.length < 1) {
+          mon.push(pick)
+        } else if (dow !== 1 && dow !== 4 && best.length < 3) {
+          best.push(pick)
+        }
+      })
 
-    let lockFound = false
-    const filtered = [...thu, ...mon, ...best].map(pick => {
-      if (pick.is_lock && !lockFound) {
-        lockFound = true
-        return pick
+      // only allow first lock pick
+      let lockFound = false
+      const filtered = [...thu, ...mon, ...best].map(pick => {
+        if (pick.is_lock && !lockFound) {
+          lockFound = true
+          return pick
+        }
+        return { ...pick, is_lock: false }
+      })
+
+      // warn if we dropped any extras
+      if (filtered.length < valid.length) {
+        setWarning('⚠️ Showing max of 1 Thursday, 1 Monday & 3 Best-Choice picks.')
       }
-      return { ...pick, is_lock: false }
-    })
 
-    if (filtered.length < valid.length) {
-      setWarning('⚠️ Showing max of 1 Thursday, 1 Monday & 3 Best-Choice picks.')
+      setPicks(filtered)
     }
 
-    setPicks(filtered)
     setLoading(false)
   }
 
@@ -119,10 +128,10 @@ export default function UserProfile() {
         <table style={{ width:'100%', borderCollapse:'collapse' }}>
           <thead>
             <tr>
-              <th style={{border:'1px solid #ccc',padding:8}}>Game</th>
-              <th style={{border:'1px solid #ccc',padding:8}}>Spread</th>
-              <th style={{border:'1px solid #ccc',padding:8}}>Your Pick</th>
-              <th style={{border:'1px solid #ccc',padding:8}}>Lock?</th>
+              <th style={{ border:'1px solid #ccc', padding:8 }}>Game</th>
+              <th style={{ border:'1px solid #ccc', padding:8 }}>Spread</th>
+              <th style={{ border:'1px solid #ccc', padding:8 }}>Your Pick</th>
+              <th style={{ border:'1px solid #ccc', padding:8 }}>Lock?</th>
             </tr>
           </thead>
           <tbody>
@@ -130,22 +139,24 @@ export default function UserProfile() {
               const g = pick.games
               return (
                 <tr key={pick.id}>
-                  <td style={{border:'1px solid #ccc',padding:8}}>
+                  <td style={{ border:'1px solid #ccc', padding:8 }}>
                     {g.away_team} @ {g.home_team}
                     <br/>
                     <small>
-                      {new Date(g.kickoff_time).toLocaleString(undefined,{
-                        weekday:'short',hour:'2-digit',minute:'2-digit'
+                      {new Date(g.kickoff_time).toLocaleString(undefined, {
+                        weekday: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit'
                       })}
                     </small>
                   </td>
-                  <td style={{border:'1px solid #ccc',padding:8}}>
+                  <td style={{ border:'1px solid #ccc', padding:8 }}>
                     {g.spread > 0 ? `+${g.spread}` : g.spread}
                   </td>
-                  <td style={{border:'1px solid #ccc',padding:8}}>
+                  <td style={{ border:'1px solid #ccc', padding:8 }}>
                     {pick.selected_team}
                   </td>
-                  <td style={{border:'1px solid #ccc',padding:8,textAlign:'center'}}>
+                  <td style={{ border:'1px solid #ccc', padding:8, textAlign:'center' }}>
                     {pick.is_lock ? '✅' : ''}
                   </td>
                 </tr>
