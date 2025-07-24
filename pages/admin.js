@@ -253,7 +253,7 @@ export default function Admin() {
           <label>Week:&nbsp;
             <input
               type="number"
-              min="1"}
+              min="1"
               value={selectedWeek}
               onChange={e => setSelectedWeek(parseInt(e.target.value, 10) || 1)}
               style={{ width: 60 }}
