@@ -236,15 +236,17 @@ export default function Admin() {
       <section style={{ marginTop: 20 }}>
         <h2>Game Management (Week {selectedWeek})</h2>
         <div style={{ marginBottom: 12 }}>
-          <label>Week:&nbsp;
-            <input
-              type="number"
-              min="1"
-              value={selectedWeek}
-              onChange={e => setSelectedWeek(parseInt(e.target.value, 10) || 1)}
-              style={{ width: 60 }}
-            />
-          </label>
+        <label>Week:&nbsp;
+          <select
+            value={selectedWeek}
+            onChange={e => setSelectedWeek(parseInt(e.target.value,10))}
+            style={{ width: 60 }}
+          >
+            {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
+              <option key={wk} value={wk}>{wk}</option>
+            ))}
+          </select>
+        </label>
           <button onClick={handleClearWeek} style={{ marginLeft: 12 }}>
             Clear Week
           </button>
