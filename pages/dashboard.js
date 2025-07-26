@@ -257,13 +257,15 @@ export default function Dashboard() {
         </label>{' '}
         <label>
           Week:{' '}
-          <input
-            type="number"
-            min={1}
+          <select
             value={wsWeek}
-            onChange={e => setWsWeek(e.target.value)}
-          />
-        </label>{' '}
+            onChange={e => setWsWeek(parseInt(e.target.value,10))}
+          >
+            {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
+              <option key={wk} value={wk}>{wk}</option>
+            ))}
+          </select>
+        </label>
         <button onClick={fetchWeeklyScore} disabled={wsLoading}>
           {wsLoading ? 'Loading…' : 'Get Score'}
         </button>
@@ -328,13 +330,15 @@ export default function Dashboard() {
         <h2>League Picks</h2>
         <label>
           Week:{' '}
-          <input
-            type="number"
-            min={1}
+          <select
             value={lpWeek}
-            onChange={e => setLpWeek(e.target.value)}
-          />
-        </label>{' '}
+            onChange={e => setLpWeek(parseInt(e.target.value,10))}
+          >
+            {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
+              <option key={wk} value={wk}>{wk}</option>
+            ))}
+          </select>
+        </label>
         <button onClick={loadLeaguePicks} disabled={lpLoading}>
           {lpLoading ? 'Loading…' : 'Load Picks'}
         </button>
