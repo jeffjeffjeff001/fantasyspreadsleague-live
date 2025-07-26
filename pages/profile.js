@@ -104,21 +104,17 @@ export default function UserProfile() {
       <div style={{ margin: '16px 0' }}>
         <label>
           Week:&nbsp;
-          <input
-            type="number"
-            min="1"
+          <select
             value={selectedWeek}
-            onChange={e => setSelectedWeek(parseInt(e.target.value, 10) || 1)}
+            onChange={e => setSelectedWeek(parseInt(e.target.value,10))}
             style={{ width: 60 }}
-          />
+          >
+            {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
+              <option key={wk} value={wk}>{wk}</option>
+            ))}
+          </select>
         </label>
-        <button
-          onClick={loadPicks}
-          disabled={loading}
-          style={{ marginLeft: 12 }}
-        >
-          {loading ? 'Loading…' : `Load Week ${selectedWeek} Picks`}
-        </button>
+        <button …>Load Week {selectedWeek} Picks</button>
       </div>
 
       {error && <p style={{ color:'red' }}>Error: {error}</p>}
