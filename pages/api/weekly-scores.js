@@ -124,4 +124,23 @@ export default async function handler(req, res) {
     if (u.correct === 5) u.perfectBonus = 3
   })
 
-  // 9) build your response array exactly as before
+  // 9) build final JSON array and return
+  const response = Object.entries(statsByUser).map(([email, u]) => {
+    const weeklyPoints =
+      u.correct +             // +1 per correct pick
+      u.lockCorrect * 2 +     // +2 extra for each correct lock
+      u.lockIncorrect * -2 +  // -2 for each wrong lock
+      u.perfectBonus          // +3 if 5/5 correct
+
+    return {
+      email,
+      correct:       u.correct,
+      lockCorrect:   u.lockCorrect,
+      lockIncorrect: u.lockIncorrect,
+      perfectBonus:  u.perfectBonus,
+      weeklyPoints
+    }
+  })
+
+  return res.status(200).json(response)
+}
