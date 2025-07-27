@@ -1,4 +1,5 @@
 // pages/nfl-scores.js
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '../lib/supabaseClient'
@@ -37,13 +38,17 @@ export default function NFLScores() {
       <div style={{ margin: '16px 0' }}>
         <label>
           Week:&nbsp;
-          <input
-            type="number"
-            min="1"
+          <select
             value={week}
-            onChange={e => setWeek(parseInt(e.target.value, 10) || 1)}
+            onChange={e => setWeek(parseInt(e.target.value, 10))}
             style={{ width: 60 }}
-          />
+          >
+            {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
+              <option key={wk} value={wk}>
+                {wk}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
 
