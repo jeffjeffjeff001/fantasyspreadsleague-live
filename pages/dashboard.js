@@ -325,37 +325,34 @@ export default function Dashboard() {
         )}
       </section>
 
-{/* League Picks */}
-<section style={{ marginTop: 60 }}>
-  <h2>League Picks</h2>
-  <div style={{ marginBottom: 12 }}>
-    <label>
-      Week:&nbsp;
-      {/* ← dropdown for weeks 1–18 */}
-      <select
-        value={lpWeek}
-        onChange={e => setLpWeek(parseInt(e.target.value, 10))}
-      >
-        {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
-          <option key={wk} value={wk}>{wk}</option>
-        ))}
-      </select>
-    </label>
-    <button onClick={loadLeaguePicks} disabled={lpLoading} style={{ marginLeft: 8 }}>
-      {lpLoading ? 'Loading…' : 'Load Picks'}
-    </button>
-  </div>
-  …
-</section>
-
-        {lpLoading && <p>Loading picks…</p>}
-
-        {!lpLoading && lpPicks.length > 0 ? (
-          <table
-            border={1}
-            cellPadding={8}
-            style={{ borderCollapse: 'collapse', marginTop: 10 }}
+      {/* League Picks */}
+      <section style={{ marginTop: 60 }}>
+        <h2>League Picks</h2>
+        <div style={{ marginBottom: 12 }}>
+          <label>
+            Week:&nbsp;
+            <select
+              value={lpWeek}
+              onChange={e => setLpWeek(parseInt(e.target.value, 10))}
+            >
+              {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
+                <option key={wk} value={wk}>{wk}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            onClick={loadLeaguePicks}
+            disabled={lpLoading}
+            style={{ marginLeft: 8 }}
           >
+            {lpLoading ? 'Loading…' : 'Load Picks'}
+          </button>
+        </div>
+
+        {lpLoading ? (
+          <p>Loading picks…</p>
+        ) : lpPicks.length > 0 ? (
+          <table border={1} cellPadding={8} style={{ borderCollapse: 'collapse', marginTop: 10 }}>
             <thead>
               <tr>
                 <th>Username</th>
@@ -369,15 +366,13 @@ export default function Dashboard() {
                 <tr key={i}>
                   <td>{u.username}</td>
                   <td style={{ textAlign: 'center' }}>{u.thursday}</td>
-                  <td>{u.best.join(', ')}</td>
+                  <td>{u.best.slice(0,3).join(', ')}</td>
                   <td style={{ textAlign: 'center' }}>{u.monday}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        ) : null}
-
-        {!lpLoading && lpPicks.length === 0 && (
+        ) : (
           <p>No league picks found for Week {lpWeek}.</p>
         )}
       </section>
