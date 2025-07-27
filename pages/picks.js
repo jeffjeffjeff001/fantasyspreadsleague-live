@@ -36,7 +36,6 @@ export default function PickSubmission() {
     loadGames()
   }, [selectedWeek, session])
 
-  // If not signed in, ask them to
   if (!session) {
     return (
       <div style={{ padding: 20 }}>
@@ -48,8 +47,6 @@ export default function PickSubmission() {
   }
 
   // Helpers — use local getDay() so Thu/Mon buckets match user TZ
-  const isThursday = iso => new Date(iso).getDay() === 4
-  const isMonday   = iso => new Date(iso).getDay() === 1
   const countCats  = map => {
     let th = 0, mo = 0, be = 0
     Object.keys(map).forEach(id => {
@@ -64,6 +61,7 @@ export default function PickSubmission() {
     return { th, mo, be }
   }
 
+  // ← UPDATED handlePick to special-case WEEK 18
   const handlePick = (gid, team) => {
     setStatus(null)
     const copy = { ...picks }
@@ -75,7 +73,7 @@ export default function PickSubmission() {
       return
     }
 
-    // max 5 total
+    // max 5 total always
     if (Object.keys(copy).length >= 5) {
       setStatus('🚫 You can only pick up to 5 games total.')
       return
@@ -85,20 +83,35 @@ export default function PickSubmission() {
     copy[gid] = team
     const { th, mo, be } = countCats(copy)
 
-    if (th > 1) {
-      delete copy[gid]
-      setStatus('🚫 Only 1 Thursday pick allowed.')
-      return
-    }
-    if (mo > 1) {
-      delete copy[gid]
-      setStatus('🚫 Only 1 Monday pick allowed.')
-      return
-    }
-    if (be > 3) {
-      delete copy[gid]
-      setStatus('🚫 Only 3 “Best Choice” picks allowed.')
-      return
+    if (selectedWeek === 18) {
+      // Week 18: only "best" picks allowed, up to 5
+      if (th > 0 || mo > 0) {
+        delete copy[gid]
+        setStatus('🚫 Week 18 only “Best” picks allowed.')
+        return
+      }
+      if (be > 5) {
+        delete copy[gid]
+        setStatus('🚫 Only 5 picks allowed in Week 18.')
+        return
+      }
+    } else {
+      // Regular weeks: 1 Thu, 1 Mon, 3 Best
+      if (th > 1) {
+        delete copy[gid]
+        setStatus('🚫 Only 1 Thursday pick allowed.')
+        return
+      }
+      if (mo > 1) {
+        delete copy[gid]
+        setStatus('🚫 Only 1 Monday pick allowed.')
+        return
+      }
+      if (be > 3) {
+        delete copy[gid]
+        setStatus('🚫 Only 3 “Best Choice” picks allowed.')
+        return
+      }
     }
 
     setPicks(copy)
