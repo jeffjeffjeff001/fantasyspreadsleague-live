@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid week parameter' })
   }
 
-  // 2) load that week’s final scores from your `results` table
+  // 2) load that week’s final scores
   const { data: results = [], error: resultsError } = await supabaseAdmin
     .from('results')
     .select('away_team,home_team,away_score,home_score,week')
@@ -43,6 +43,7 @@ export default async function handler(req, res) {
         away_team,
         home_team,
         spread,
+        kickoff_time,
         week
       )
     `)
@@ -59,7 +60,6 @@ export default async function handler(req, res) {
     const email = pick.user_email
     if (!buckets[email]) buckets[email] = { thu: [], mon: [], best: [] }
 
-    // day‑of‑week: 4=Thu, 1=Mon, else “best”
     const dow  = new Date(pick.games.kickoff_time).getDay()
     const slot = dow === 4 ? 'thu' : dow === 1 ? 'mon' : 'best'
     const max  = slot === 'best' ? 3 : 1
@@ -75,7 +75,7 @@ export default async function handler(req, res) {
     filteredPicks.push(...thu, ...best, ...mon)
   })
 
-  // 6) now initialize stats only for those filteredPicks
+  // 6) initialize stats only for those filteredPicks
   const statsByUser = {}
   filteredPicks.forEach(pick => {
     if (!statsByUser[pick.user_email]) {
@@ -88,13 +88,11 @@ export default async function handler(req, res) {
     }
   })
 
-  // 7) score each of the filteredPicks
+  // 7) score each of the filteredPicks, treating a push (home+spread === away) as correct for either team
   for (const pick of filteredPicks) {
     const g = pick.games
-
-    // trim & match exactly as you already do…
-    const pickAway  = g.away_team.trim()
-    const pickHome  = g.home_team.trim()
+    const pickAway = g.away_team.trim()
+    const pickHome = g.home_team.trim()
 
     const result = results.find(r =>
       r.home_team.trim() === pickHome &&
@@ -102,24 +100,40 @@ export default async function handler(req, res) {
     )
     if (!result) continue
 
-    const spread       = parseFloat(g.spread)
-    const homeCovers   = (result.home_score + spread) > result.away_score
-    const coveringTeam = homeCovers
-      ? result.home_team.trim()
-      : result.away_team.trim()
-
+    const spread = parseFloat(g.spread)
+    const homeAdj = result.home_score + spread
+    const u = statsByUser[pick.user_email]
     const selected = pick.selected_team.trim()
-    const u        = statsByUser[pick.user_email]
 
-    if (selected === coveringTeam) {
-      u.correct += 1
-      if (pick.is_lock) u.lockCorrect += 1
-    } else if (pick.is_lock) {
-      u.lockIncorrect += 1
+    if (homeAdj > result.away_score) {
+      // home truly covers
+      if (selected === pickHome) {
+        u.correct += 1
+        if (pick.is_lock) u.lockCorrect += 1
+      } else if (pick.is_lock) {
+        u.lockIncorrect += 1
+      }
+
+    } else if (homeAdj < result.away_score) {
+      // away covers
+      if (selected === pickAway) {
+        u.correct += 1
+        if (pick.is_lock) u.lockCorrect += 1
+      } else if (pick.is_lock) {
+        u.lockIncorrect += 1
+      }
+
+    } else {
+      // push: both home & away get credit
+      if (selected === pickHome || selected === pickAway) {
+        u.correct += 1
+        if (pick.is_lock) u.lockCorrect += 1
+      }
+      // no penalty on a lock that pushes
     }
   }
 
-  // 8) perfect‐week bonus (still “5/5 → +3”)
+  // 8) perfect‐week bonus (5/5 → +3)
   Object.values(statsByUser).forEach(u => {
     if (u.correct === 5) u.perfectBonus = 3
   })
@@ -130,7 +144,7 @@ export default async function handler(req, res) {
       u.correct +             // +1 per correct pick
       u.lockCorrect * 2 +     // +2 extra for each correct lock
       u.lockIncorrect * -2 +  // -2 for each wrong lock
-      u.perfectBonus          // +3 if 5/5 correct
+      u.perfectBonus          // +3 bonus if perfect week
 
     return {
       email,
