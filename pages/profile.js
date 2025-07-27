@@ -106,7 +106,7 @@ export default function UserProfile() {
           Week:&nbsp;
           <select
             value={selectedWeek}
-            onChange={e => setSelectedWeek(parseInt(e.target.value,10))}
+            onChange={e => setSelectedWeek(parseInt(e.target.value, 10))}
             style={{ width: 60 }}
           >
             {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
@@ -114,14 +114,14 @@ export default function UserProfile() {
             ))}
           </select>
         </label>
--        <button …>Load Week {selectedWeek} Picks</button>
-+        <button
-+          onClick={loadPicks}
-+          disabled={loading}
-+          style={{ marginLeft: 12 }}
-+        >
-+          {loading ? 'Loading…' : `Load Week ${selectedWeek} Picks`}
-+        </button>
+        {/* ← REPLACED THE INVALID BUTTON */}
+        <button
+          onClick={loadPicks}
+          disabled={loading}
+          style={{ marginLeft: 12 }}
+        >
+          {loading ? 'Loading…' : `Load Week ${selectedWeek} Picks`}
+        </button>
       </div>
 
       {error && <p style={{ color:'red' }}>Error: {error}</p>}
