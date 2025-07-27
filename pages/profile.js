@@ -114,7 +114,14 @@ export default function UserProfile() {
             ))}
           </select>
         </label>
-        <button …>Load Week {selectedWeek} Picks</button>
+-        <button …>Load Week {selectedWeek} Picks</button>
++        <button
++          onClick={loadPicks}
++          disabled={loading}
++          style={{ marginLeft: 12 }}
++        >
++          {loading ? 'Loading…' : `Load Week ${selectedWeek} Picks`}
++        </button>
       </div>
 
       {error && <p style={{ color:'red' }}>Error: {error}</p>}
