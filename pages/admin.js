@@ -356,30 +356,35 @@ export default function Admin() {
         )}
       </section>
 
-      {/* View User Picks */}
-      <section style={{ marginTop: 40 }}>
-        <h2>View User Picks</h2>
-        <div style={{ marginBottom: 12 }}>
-          <select
-            value={userForPicks}
-            onChange={e => setUserForPicks(e.target.value)}
-          >
-            <option value="">Select user</option>
-            {profiles.map(p => (
-              <option key={p.email} value={p.email}>{p.username}</option>
-            ))}
-          </select>
-          <input
-            type="number"
-            min="1"
-            value={weekForPicks}
-            onChange={e => setWeekForPicks(parseInt(e.target.value, 10) || 1)}
-            style={{ width: 60, marginLeft: 8 }}
-          />
-          <button onClick={loadUserPicks} style={{ marginLeft: 8 }}>
-            Load Picks
-          </button>
-        </div>
+{/* View User Picks */}
+<section style={{ marginTop: 40 }}>
+  <h2>View User Picks</h2>
+  <div style={{ marginBottom: 12 }}>
+    <select
+      value={userForPicks}
+      onChange={e => setUserForPicks(e.target.value)}
+    >
+      <option value="">Select user</option>
+      {profiles.map(p => (
+        <option key={p.email} value={p.email}>{p.username}</option>
+      ))}
+    </select>
+
+    {/* ← replaced number input with dropdown */}
+    <select
+      value={weekForPicks}
+      onChange={e => setWeekForPicks(parseInt(e.target.value, 10))}
+      style={{ width: 60, marginLeft: 8 }}
+    >
+      {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
+        <option key={wk} value={wk}>{wk}</option>
+      ))}
+    </select>
+
+    <button onClick={loadUserPicks} style={{ marginLeft: 8 }}>
+      Load Picks
+    </button>
+  </div>
         {loadingPicks ? (
           <p>Loading picks…</p>
         ) : (
