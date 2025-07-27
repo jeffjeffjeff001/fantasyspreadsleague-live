@@ -325,29 +325,28 @@ export default function Dashboard() {
         )}
       </section>
 
-      {/* League Picks */}
-      <section style={{ marginTop: 60 }}>
-        <h2>League Picks</h2>
-        <div style={{ marginBottom: 12 }}>
-          <label>
-            Week:&nbsp;
-            <select
-              value={lpWeek}
-              onChange={e => setLpWeek(parseInt(e.target.value, 10))}
-            >
-              {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
-                <option key={wk} value={wk}>{wk}</option>
-              ))}
-            </select>
-          </label>
-          <button
-            onClick={loadLeaguePicks}
-            disabled={lpLoading}
-            style={{ marginLeft: 8 }}
-          >
-            {lpLoading ? 'Loading…' : 'Load Picks'}
-          </button>
-        </div>
+{/* League Picks */}
+<section style={{ marginTop: 60 }}>
+  <h2>League Picks</h2>
+  <div style={{ marginBottom: 12 }}>
+    <label>
+      Week:&nbsp;
+      {/* ← dropdown for weeks 1–18 */}
+      <select
+        value={lpWeek}
+        onChange={e => setLpWeek(parseInt(e.target.value, 10))}
+      >
+        {Array.from({ length: 18 }, (_, i) => i + 1).map(wk => (
+          <option key={wk} value={wk}>{wk}</option>
+        ))}
+      </select>
+    </label>
+    <button onClick={loadLeaguePicks} disabled={lpLoading} style={{ marginLeft: 8 }}>
+      {lpLoading ? 'Loading…' : 'Load Picks'}
+    </button>
+  </div>
+  …
+</section>
 
         {lpLoading && <p>Loading picks…</p>}
 
